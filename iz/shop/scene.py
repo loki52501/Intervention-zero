@@ -1,4 +1,4 @@
-﻿"""SHOP scene: a MuJoCo retail store with a wheeled humanoid robot, a shopping cart,
+"""SHOP scene: a MuJoCo retail store with a wheeled humanoid robot, a shopping cart,
 shelves with products, spills and walking shoppers.  build_shop(seed) -> (xml, meta).
 
 Collision bit layout (contype = own bit, conaffinity = bits collided with):
@@ -156,7 +156,7 @@ def build_shop(seed: int, cart_mass_kg=None, n_shoppers=None):
   <asset>
     <texture name="sky" type="skybox" builtin="gradient" rgb1="0.80 0.88 0.97" rgb2="0.93 0.95 0.98" width="64" height="64"/>
     <texture name="floortex" type="2d" builtin="checker" rgb1="0.90 0.91 0.93" rgb2="0.82 0.84 0.87" width="256" height="256"/>
-    <material name="floor" texture="floortex" texrepeat="12 8" reflectance="0.05"/>
+    <material name="floor" texture="floortex" texrepeat="12 8" reflectance="0.0"/>
   </asset>
   <worldbody>
     <light pos="0 0 6" dir="0 0.2 -1" diffuse="0.6 0.6 0.6" castshadow="false"/>

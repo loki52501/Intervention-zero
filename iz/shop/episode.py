@@ -194,13 +194,26 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
     cadence = max(1, int(round(0.1 / dt)))
     chk = 5
     viewer_every = max(1, int(round(1 / 60 / dt)))
-    rec_every = max(1, int(round(1 / 30 / dt)))
+    rec_every = max(1, int(round(float(getattr(recorder, "every_s", 1 / 30)) / dt)))
     renderer = cam = None
     if recorder is not None:
-        renderer = mujoco.Renderer(model, 480, 640)
+        # optional recorder.width/height (stills); default 640x480 for mp4 clips
+        rw, rh = int(getattr(recorder, "width", 640)), int(getattr(recorder, "height", 480))
+        model.vis.global_.offwidth = max(int(model.vis.global_.offwidth), rw)
+        model.vis.global_.offheight = max(int(model.vis.global_.offheight), rh)
+        renderer = mujoco.Renderer(model, rh, rw)
         cam = mujoco.MjvCamera()
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-        cam.distance, cam.azimuth, cam.elevation = 5.5, 135.0, -28.0
+        # 3/4 view from behind-left, framing robot + cart together
+        cam.distance, cam.azimuth, cam.elevation = 5.6, 225.0, -40.0
+        vopt = mujoco.MjvOption()
+        vopt.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = 0   # hide sensor rays in clips
+    if viewer is not None:
+        try:
+            with viewer.lock():
+                viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = 0
+        except Exception:
+            pass
     wall0 = time.perf_counter()
     finished = False
 
@@ -320,10 +333,14 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
             if ahead > 0:
                 time.sleep(ahead)
         if recorder is not None and k % rec_every == 0:
-            cam.lookat[:] = (data.xpos[robot_id][0], data.xpos[robot_id][1], 0.8)
-            renderer.update_scene(data, camera=cam)
+            mx = 0.5 * (data.xpos[robot_id][0] + data.xpos[cart_id][0])
+            my = 0.5 * (data.xpos[robot_id][1] + data.xpos[cart_id][1])
+            cam.lookat[:] = (mx, my, 0.7)
+            renderer.update_scene(data, camera=cam, scene_option=vopt)
             frame = renderer.render()
-            if hasattr(recorder, "append_data"):
+            if hasattr(recorder, "on_frame"):
+                recorder.on_frame(frame, float(data.time), str(getattr(ctrl, "state", "")))
+            elif hasattr(recorder, "append_data"):
                 recorder.append_data(frame)
             elif hasattr(recorder, "append"):
                 recorder.append(frame)
