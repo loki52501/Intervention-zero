@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intervention Zero</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%2315803D'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js" defer></script>
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">
+      <h1>Intervention Zero</h1>
+      <p class="pitch">Every takeover becomes a tested, permanent fix.</p>
+    </div>
+    <div class="meta">
+      <span id="conn-status" class="down" title="connection"></span>
+      <span class="meta-item mono">run <span id="run-id">—</span></span>
+      <span class="meta-item mono" id="day-shift">day — · —</span>
+      <span class="meta-item mono" id="policy-version">policy v—</span>
+      <span id="synthetic-badge" class="hidden">SYNTHETIC DEMO DATA</span>
+    </div>
+    <div class="tfmr">
+      <div class="tfmr-label">TFMR</div>
+      <div id="tfmr-value">—</div>
+      <div class="tfmr-sub">takeovers per mission</div>
+    </div>
+  </header>
+
+  <div id="drift-banner" class="hidden">
+    <div id="drift-title">DRIFT DETECTED — Site A renovated</div>
+    <div id="drift-detail"></div>
+  </div>
+
+  <main id="main">
+    <section id="floor-wrap" class="card">
+      <div class="floor-head">
+        <h2 id="site-name">Site A</h2>
+        <div class="legend">
+          <span class="lg"><i class="lg-robot"></i>robot</span>
+          <span class="lg"><i class="lg-door"></i>door</span>
+          <span class="lg"><i class="lg-human"></i>HUMAN ONLY</span>
+        </div>
+      </div>
+      <div class="floor-canvas"><canvas id="floor"></canvas></div>
+      <div id="clip-overlay" class="hidden">
+        <video id="clip-video" muted autoplay playsinline></video>
+        <div id="clip-caption"></div>
+      </div>
+    </section>
+
+    <aside id="side">
+      <section id="fix-card" class="card">
+        <h2>Proposed fix</h2>
+        <div id="fix-meta"></div>
+        <div id="fix-empty">Waiting for the first takeover…</div>
+        <div id="fix-edits"></div>
+      </section>
+
+      <section id="gate-panel" class="card">
+        <h2>Gate <span id="gate-candidate" class="mono"></span></h2>
+        <div id="bar-train" class="bar-row"><span class="bar-name">Train</span><div class="bar-track"><div class="bar-fill before"></div><div class="bar-fill after"></div></div><span class="bar-nums"></span></div>
+        <div id="bar-heldout" class="bar-row"><span class="bar-name">Held-out</span><div class="bar-track"><div class="bar-fill before"></div><div class="bar-fill after"></div></div><span class="bar-nums"></span></div>
+        <div id="bar-regression" class="bar-row"><span class="bar-name">Regression</span><div class="bar-track"><div class="bar-fill before"></div><div class="bar-fill after"></div></div><span class="bar-nums"></span></div>
+        <div id="bar-safety" class="bar-row"><span class="bar-name">Safety</span><div class="bar-track"><div class="bar-fill before"></div><div class="bar-fill after"></div></div><span class="bar-nums"></span></div>
+        <div id="gate-stamp-wrap"><div id="gate-stamp"></div></div>
+        <div id="gate-reason"></div>
+      </section>
+
+      <section id="spark-card" class="card">
+        <div class="label">TFMR trend</div>
+        <canvas id="tfmr-spark"></canvas>
+      </section>
+
+      <section id="coach-panel" class="card">
+        <h2>Coach (fixer playbook)</h2>
+        <div class="coach-row">
+          <span id="coach-version" class="mono">playbook v—</span>
+          <span id="coach-verdict" class="chip"></span>
+        </div>
+        <ul id="coach-changes"></ul>
+        <div id="coach-reason"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer id="ticker">
+    <span class="live-label">LIVE</span>
+    <div id="ticker-track"></div>
+  </footer>
+</div>
+</body>
+</html>
