@@ -36,13 +36,12 @@ def estimate_cost(model: str, in_tok: int, out_tok: int) -> float:
 
 
 def _report(model: str, cost: float, i: int, o: int) -> None:
+    """Record spend in the process budget. BudgetExceeded propagates (the MAX_LLM_USD guard)."""
     try:
-        from iz.obs import budget  # type: ignore
-        fn = getattr(budget, "record", None)
-        if fn:
-            fn(model=model, cost_usd=cost, input_tokens=i, output_tokens=o)
-    except Exception:
-        pass
+        from iz.obs.budget import get_budget
+    except Exception:  # noqa: BLE001
+        return
+    get_budget().add(cost, model)
 
 
 def _with_retry(call: Callable[[], LLMResponse]) -> LLMResponse:
@@ -50,12 +49,13 @@ def _with_retry(call: Callable[[], LLMResponse]) -> LLMResponse:
     for attempt in range(1, 4):
         try:
             resp = call()
-            _report(resp.model, resp.cost_usd, resp.input_tokens, resp.output_tokens)
-            return resp
         except Exception as e:  # noqa: BLE001
             last = e
             if attempt < 3:
                 time.sleep(0.5 * attempt)
+            continue
+        _report(resp.model, resp.cost_usd, resp.input_tokens, resp.output_tokens)
+        return resp
     raise LLMError(f"LLM call failed after 3 attempts: {type(last).__name__}: {last}")
 
 
@@ -73,17 +73,55 @@ class AnthropicLLM:
                 tools=[{"name": "respond", "description": "Return the answer", "input_schema": schema}],
                 tool_choice={"type": "tool", "name": "respond"},
             )
-            try:
-                msg = self.client.messages.create(temperature=0, **kw)
-            except self._anthropic.BadRequestError as e:
-                if "temperature" not in str(e):
-                    raise
-                msg = self.client.messages.create(**kw)
-            data = next(b.input for b in msg.content if getattr(b, "type", "") == "tool_use")
+            msg = self._create(kw)
+            data = _extract_json(msg)
             i, o = msg.usage.input_tokens, msg.usage.output_tokens
             return LLMResponse(data=dict(data), model=model, input_tokens=i, output_tokens=o,
                                cost_usd=estimate_cost(model, i, o))
         return _with_retry(call)
+
+    # Some models reject `temperature` (TypeError in newer SDKs, 400 in others) and some
+    # reject forced tool_choice. Remember what failed so later calls skip it.
+    _no_temp: bool = False
+    _auto_tool: bool = False
+
+    def _create(self, kw: dict[str, Any]) -> Any:
+        for _ in range(3):
+            args = dict(kw)
+            if self._auto_tool:
+                args["tool_choice"] = {"type": "auto"}
+                args["system"] = (kw["system"] + "\n\nAlways answer by calling the `respond` tool "
+                                  "(or, failing that, with a single JSON object only).")
+            if not self._no_temp:
+                args["temperature"] = 0
+            try:
+                return self.client.messages.create(**args)
+            except TypeError as e:
+                if "temperature" in str(e) and not self._no_temp:
+                    self._no_temp = True
+                    continue
+                raise
+            except self._anthropic.BadRequestError as e:
+                s = str(e)
+                if "temperature" in s and not self._no_temp:
+                    self._no_temp = True
+                    continue
+                if "tool_choice" in s and not self._auto_tool:
+                    self._auto_tool = True
+                    continue
+                raise
+        return self.client.messages.create(**args)
+
+
+def _extract_json(msg: Any) -> dict:
+    for b in msg.content:
+        if getattr(b, "type", "") == "tool_use":
+            return dict(b.input)
+    text = "".join(getattr(b, "text", "") for b in msg.content if getattr(b, "type", "") == "text")
+    s, e = text.find("{"), text.rfind("}")
+    if s >= 0 and e > s:
+        return json.loads(text[s:e + 1])
+    raise LLMError("no tool_use block or JSON object in response")
 
 
 class OpenAILLM:
