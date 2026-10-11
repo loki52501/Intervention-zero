@@ -20,6 +20,7 @@ PERSON_CLEARANCE_M = 0.35  # LOCKED, mirrors controller.LOCKED
 SHOPPER_SPEED = 0.8
 SPILL_RADIUS_DEFAULT = 0.6
 SHOPPER_PAUSE_M = 1.1
+FLEET_HELPER_DELAY_S = 4.0  # helpers hold still this long so robot 0 can publish first
 
 
 # ---------------------------------------------------------------- pure helpers
@@ -68,7 +69,7 @@ def classify_failure(failure):
     """Map a failure name to (status, failure)."""
     if failure is None:
         return "success", None
-    if failure in ("person_contact", "too_close_to_person"):
+    if failure in ("person_contact", "too_close_to_person", "too_close_to_robot"):
         return "safety_violation", failure
     return "takeover", failure
 
@@ -132,11 +133,35 @@ def _spill_list(meta):
     return out
 
 
-def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, recorder=None) -> dict:
+def _spec_get(spec, key, default=None):
+    if spec is None:
+        return default
+    if isinstance(spec, dict):
+        return spec.get(key, default)
+    return getattr(spec, key, default)
+
+
+def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, recorder=None,
+                spec=None, robots: int = 1, blackboard=None, world_id=None,
+                emit_rd: bool = False) -> dict:
     from iz.shop.scene import build_shop
     from iz.shop.controller import ShopController
 
-    xml, meta = build_shop(int(seed))
+    if spec is not None:
+        from iz.worldgen.build import build_world
+        xml, meta = build_world(spec, seed)
+    else:
+        xml, meta = build_shop(int(seed))
+    robots = int(robots)
+    if world_id is None:
+        world_id = _spec_get(spec, "name") or f"shop:{seed}"
+    fleet = robots > 1
+    coord = None
+    if fleet:
+        from iz.fleet.scene import add_fleet_robots
+        from iz.fleet.coordinator import Coordinator, ROBOT_RADIUS
+        from iz.store.blackboard import MemoryBlackboard
+        xml, meta = add_fleet_robots(xml, meta, robots)
     model = mujoco.MjModel.from_xml_string(xml)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
@@ -175,6 +200,39 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
     prod_z0 = float(data.xpos[prod_id][2])
 
     vx_a, vy_a, wz_a = (int(model.joint(n).dofadr[0]) for n in ("base_x", "base_y", "base_yaw"))
+    helpers = []  # fleet only
+    fleet_bodies = [robot_id]
+    h_geoms = []
+    min_rob_clear = {}
+    if fleet:
+        bb = blackboard if blackboard is not None else MemoryBlackboard()
+        coord = Coordinator(meta, bb, world_id, meta["fleet_robots"], dict(params))
+        coord.assign_tasks(0.0)
+        for rid in meta["fleet_robots"]:
+            if rid == "robot":
+                continue
+            k_ = rid.rsplit("_", 1)[-1]
+            bid = _name_id(model, B, rid)
+            fleet_bodies.append(bid)
+            jn = [model.joint(f"base_{a}_{k_}") for a in ("x", "y", "yaw")]
+            an = [_name_id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, f"act_{a}_{k_}") for a in ("vx", "vy", "wz")]
+            gs = [g for g in range(model.ngeom)
+                  if root[model.geom_bodyid[g]] == root[bid] and model.geom_contype[g] != 0]
+            h_geoms.extend(gs)
+            helpers.append(dict(rid=rid, bid=bid, q=[int(j.qposadr[0]) for j in jn],
+                                v=[int(j.dofadr[0]) for j in jn], act=an, geoms=gs))
+            min_rob_clear[rid] = 9.0
+        min_rob_clear["robot"] = 9.0
+        q0 = [int(model.joint(n).qposadr[0]) for n in ("base_x", "base_y", "base_yaw")]
+        shopper_near = near_geoms + h_geoms
+    else:
+        shopper_near = near_geoms
+    robot_dist = {"robot": 0.0}
+    for h_ in helpers:
+        robot_dist[h_["rid"]] = 0.0
+    last_xy = {"robot": np.array(data.xpos[robot_id][:2])}
+    for h_ in helpers:
+        last_xy[h_["rid"]] = np.array([data.qpos[h_["q"][0]], data.qpos[h_["q"][1]]])
     sid_wrist = _name_id(model, mujoco.mjtObj.mjOBJ_SENSOR, "f_wrist")
 
     # state
@@ -226,12 +284,27 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
         for sh in shoppers:
             mi, path, z, clk = sh
             cur = data.mocap_pos[mi][:2]
-            if k == 0 or min(math.hypot(cur[0] - rxy[0], cur[1] - rxy[1]),
-                             math.hypot(cur[0] - cxy_[0], cur[1] - cxy_[1])) > SHOPPER_PAUSE_M:
+            dmin = min(math.hypot(cur[0] - rxy[0], cur[1] - rxy[1]),
+                       math.hypot(cur[0] - cxy_[0], cur[1] - cxy_[1]))
+            if fleet:
+                for b_ in fleet_bodies[1:]:
+                    dmin = min(dmin, math.hypot(cur[0] - data.xpos[b_][0], cur[1] - data.xpos[b_][1]))
+            if k == 0 or dmin > SHOPPER_PAUSE_M:
                 sh[3] = clk = clk + (dt if k else 0.0)
             p = shopper_position(path, clk)
             data.mocap_pos[mi] = (p[0], p[1], z)
         ctrl.step(t)
+        if fleet:
+            for h_ in helpers:
+                if t < FLEET_HELPER_DELAY_S:
+                    cmd = (0.0, 0.0, 0.0)
+                else:
+                    pose = (float(data.qpos[h_["q"][0]]), float(data.qpos[h_["q"][1]]),
+                            float(data.qpos[h_["q"][2]]))
+                    cmd = coord.helper_command(h_["rid"], pose)
+                for ai, c_ in zip(h_["act"], cmd):
+                    if ai >= 0:
+                        data.ctrl[ai] = float(c_)
         mujoco.mj_step(model, data)
         t = data.time
         t_end = t
@@ -277,11 +350,44 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
                 finished = True
                 break
 
+            if fleet:
+                poses, vels = {}, {}
+                poses["robot"] = (float(data.qpos[q0[0]]), float(data.qpos[q0[1]]), float(data.qpos[q0[2]]))
+                vels["robot"] = (float(data.qvel[vx_a]), float(data.qvel[vy_a]), float(data.qvel[wz_a]))
+                for h_ in helpers:
+                    poses[h_["rid"]] = tuple(float(data.qpos[i]) for i in h_["q"])
+                    if t >= FLEET_HELPER_DELAY_S:  # held helpers are not "stalled"
+                        vels[h_["rid"]] = tuple(float(data.qvel[i]) for i in h_["v"])
+                    d_ = np.array(poses[h_["rid"]][:2])
+                    robot_dist[h_["rid"]] += float(np.linalg.norm(d_ - last_xy[h_["rid"]]))
+                    last_xy[h_["rid"]] = d_
+                robot_dist["robot"] += float(np.linalg.norm(data.xpos[robot_id][:2] - last_xy["robot"]))
+                last_xy["robot"] = np.array(data.xpos[robot_id][:2])
+                rids = list(poses)
+                for ii in range(len(rids)):
+                    for jj in range(ii + 1, len(rids)):
+                        d_ = math.hypot(poses[rids[ii]][0] - poses[rids[jj]][0],
+                                        poses[rids[ii]][1] - poses[rids[jj]][1]) - 2 * ROBOT_RADIUS
+                        for r_ in (rids[ii], rids[jj]):
+                            min_rob_clear[r_] = min(min_rob_clear[r_], d_)
+                dets = []
+                for sx, sy, r in spills:
+                    if (math.hypot(cxy[0] - sx, cxy[1] - sy) < r + 0.3
+                            or math.hypot(poses["robot"][0] - sx, poses["robot"][1] - sy) < r + 0.3):
+                        dets.append((sx, sy, r))
+                if getattr(ctrl, "on_spill", False) and t < getattr(ctrl, "_slip_until", -1.0):
+                    dets.append((float(cxy[0]), float(cxy[1]), 0.6))
+                coord.tick(t, poses, vels, {"robot": dets})
+                if coord.safety_violations:
+                    failure, info = "too_close_to_robot", dict(ctx)
+                    finished = True
+                    break
+
             if shopper_geoms:
                 fromto = np.zeros(6)
                 for sg in shopper_geoms:
                     sxy = data.geom_xpos[sg][:2]
-                    for g in near_geoms:
+                    for g in shopper_near:
                         if np.linalg.norm(data.geom_xpos[g][:2] - sxy) > 2.5:
                             continue
                         d = mujoco.mj_geomDistance(model, data, g, sg, 1.0, fromto)
@@ -360,7 +466,7 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
     if len(trace) > 100:
         idx = np.linspace(0, len(trace) - 1, 100).astype(int)
         trace = [trace[i] for i in idx]
-    return {
+    result = {
         "seed": int(seed),
         "success": success,
         "status": status,
@@ -377,3 +483,43 @@ def run_episode(params: dict, seed: int, max_time_s: float = 70, viewer=None, re
         "operator_tip": "" if success else make_tip(failure, info),
         "trace": trace,
     }
+    if fleet:
+        result["robot_results"] = _fleet_results(model, data, meta, helpers, robot_id, robot_dist,
+                                                 min_rob_clear, route_pts, checkout)
+        result["coordination_events"] = list(coord.events)
+        result["fleet"] = {"robots": robots, "world": world_id, **coord.counts()}
+        if emit_rd:
+            _emit_fleet_rd(spec, world_id, seed, robots, status, coord)
+    return result
+
+
+def _fleet_results(model, data, meta, helpers, robot_id, robot_dist, min_rob_clear, route_pts, checkout):
+    out = []
+    aisles = meta.get("aisle_ys") or []
+    rxy = np.array(data.xpos[robot_id][:2])
+    out.append({"robot_id": "robot", "final_xy": [round(float(rxy[0]), 3), round(float(rxy[1]), 3)],
+                "distance_m": round(robot_dist["robot"], 3), "aisle": meta.get("target_aisle"),
+                "route_done": bool(np.linalg.norm(rxy - checkout) < 1.5),
+                "min_robot_clearance_m": round(float(min_rob_clear["robot"]), 3)})
+    for h_ in helpers:
+        xy = [float(data.qpos[h_["q"][0]]), float(data.qpos[h_["q"][1]])]
+        aisle = None
+        if aisles:
+            aisle = int(np.argmin([abs(xy[1] - a) for a in aisles]))
+        out.append({"robot_id": h_["rid"], "final_xy": [round(xy[0], 3), round(xy[1], 3)],
+                    "distance_m": round(robot_dist[h_["rid"]], 3), "aisle": aisle,
+                    "route_done": bool(np.linalg.norm(np.array(xy) - checkout) < 1.5),
+                    "min_robot_clearance_m": round(float(min_rob_clear[h_["rid"]]), 3)})
+    return out
+
+
+def _emit_fleet_rd(spec, world_id, seed, robots, status, coord):
+    try:
+        from iz.obs import rd
+        gen = _spec_get(spec, "generation", 0) or 0
+        h = rd._begin("robot", "fleet_episode", f"{world_id}:{gen}", f"fleet episode seed {seed}",
+                      rd.base_props(run_id=world_id, situation_type="fleet", site=world_id,
+                                    robots=robots, status=status, **coord.counts()))
+        h.finish(output=status)
+    except Exception:
+        pass

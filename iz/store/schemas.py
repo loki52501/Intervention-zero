@@ -89,3 +89,29 @@ VALIDATORS: dict[str, dict] = {
     EDITS: {"$jsonSchema": EDIT_SCHEMA},
     DECISIONS: {"$jsonSchema": DECISION_SCHEMA},
 }
+
+
+# --- fleet blackboard (D10 M-FLEET)
+FLEET_BLACKBOARD = "fleet_blackboard"
+BLACKBOARD_KINDS = ["hazard", "blocked_lane", "task_claim"]
+_NUM = ["double", "int", "long"]
+BLACKBOARD_SCHEMA = {
+    "bsonType": "object",
+    "required": ["world", "kind", "x", "y", "radius", "robot_id", "ts", "ttl"],
+    "properties": {
+        "world": {"bsonType": "string"},
+        "kind": {"enum": BLACKBOARD_KINDS},
+        "x": {"bsonType": _NUM},
+        "y": {"bsonType": _NUM},
+        "radius": {"bsonType": _NUM, "minimum": 0},
+        "ttl": {"bsonType": _NUM, "minimum": 0},
+        "robot_id": {"bsonType": "string"},
+        "ts": {"bsonType": "date"},
+        "sim_t": {"bsonType": _NUM},
+        "task_id": {"bsonType": "string"},
+        # lineage: reroute/blocked_lane may point at the hazard _id it came from;
+        # walkable with $graphLookup (connectFromField parent_id, connectToField _id)
+        "parent_id": {"bsonType": ["string", "null"]},
+    },
+}
+VALIDATORS[FLEET_BLACKBOARD] = {"$jsonSchema": BLACKBOARD_SCHEMA}
