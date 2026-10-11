@@ -1,0 +1,52 @@
+:root{--bg:#f4f6fa;--card:#fff;--ink:#14213d;--mut:#5b6678;--line:#dde3ee;--acc:#2457d6;--ok:#12805c;--bad:#c0392b;--okbg:#e3f6ee;--badbg:#fdeaea}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Segoe UI",system-ui,sans-serif}
+header{padding:14px 28px 6px}
+header h1{margin:0;font-size:28px}header h1 span{color:var(--acc);font-weight:500;margin-left:8px}
+header p{margin:2px 0 0;color:var(--mut);font-size:15px}
+main{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:18px;padding:10px 28px 64px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(20,33,61,.06)}
+h2{margin:0 0 10px;font-size:20px}h2 small{font-weight:400;color:var(--mut);font-size:13px;margin-left:8px}
+h3{margin:12px 0 6px;font-size:15px;color:var(--mut)}
+textarea{width:100%;font:inherit;font-size:18px;padding:12px;border:2px solid var(--line);border-radius:10px;resize:vertical;color:var(--ink)}
+textarea:focus{outline:none;border-color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.chip{border:1px solid var(--line);background:#eef2fb;border-radius:999px;padding:6px 12px;font-size:14px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--acc)}
+.btns{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button{font:inherit;font-weight:600;padding:10px 22px;border-radius:10px;border:2px solid var(--acc);background:#fff;color:var(--acc);cursor:pointer}
+button.primary{background:var(--acc);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+.gens{color:var(--mut);font-size:14px}.gens input{width:52px;font:inherit;padding:4px}
+.status{margin-top:8px;min-height:22px;color:var(--mut);font-size:14px}.status.err{color:var(--bad)}
+.kv{display:flex;flex-wrap:wrap;gap:8px}
+.kv .k{background:#eef2fb;border-radius:8px;padding:6px 10px;font-size:15px}
+.kv .k b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600}
+.repairs{margin:10px 0 0;padding-left:18px;color:var(--mut);font-size:13px;max-height:110px;overflow:auto}
+.preview img{width:100%;border-radius:8px;border:1px solid var(--line);display:block}
+.counts{margin-top:8px;font-weight:600}
+.empty{color:var(--mut);font-style:italic}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);border-bottom:2px solid var(--line);padding:6px}
+td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.edits{font-family:Consolas,monospace;font-size:13px}
+.stamp{display:inline-block;padding:3px 10px;border-radius:6px;font-weight:700;font-size:13px;border:2px solid;transform:rotate(-3deg)}
+.stamp.PROMOTE{color:var(--ok);background:var(--okbg);border-color:var(--ok)}
+.stamp.REJECT{color:var(--bad);background:var(--badbg);border-color:var(--bad)}
+.stamp.BASELINE{color:var(--mut);border-color:var(--line)}
+.ci{color:var(--mut);font-size:13px}
+.chart{display:flex;align-items:flex-end;gap:12px;height:130px;padding:6px 0;border-bottom:2px solid var(--line)}
+.bar{flex:1;max-width:80px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.bar i{display:block;width:100%;background:var(--acc);border-radius:5px 5px 0 0;min-height:2px;transition:height .4s}
+.bar span{font-size:12px;color:var(--mut)}
+.rationale p{margin:0;font-size:16px;background:#f7f9fd;border-left:4px solid var(--acc);padding:10px 12px;border-radius:6px}
+.rationale p.empty{border-left-color:var(--line)}
+video{width:100%;max-height:340px;background:#111;border-radius:8px}
+video:not([src]){display:none}
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--ink);color:#fff;padding:10px 28px;font-size:16px;display:flex;gap:10px;align-items:center}
+.live-dot{width:10px;height:10px;border-radius:50%;background:#5eead4;flex:none}
+footer.busy .live-dot{animation:p 1s infinite}
+@keyframes p{50%{opacity:.2}}
+@media(max-width:1100px){main{grid-template-columns:1fr}}
+@media(min-width:1700px){html,body{font-size:19px}}

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intervention Zero - Prompt Studio</title>
+<link rel="stylesheet" href="/static/studio.css">
+</head>
+<body>
+<header>
+  <h1>Intervention Zero <span>Prompt Studio</span></h1>
+  <p>One prompt builds the world. Failures become takeover records. An LLM fixer proposes parameter edits. A gate decides what the robot keeps.</p>
+</header>
+<main>
+  <section class="col left">
+    <div class="card">
+      <h2>1. Describe the environment</h2>
+      <textarea id="prompt" rows="5" placeholder="Describe a store, the cart, the people, the hazards..."></textarea>
+      <div class="chips" id="examples"></div>
+      <div class="btns">
+        <button id="btnWorld" class="primary">Create world</button>
+        <button id="btnLearn" disabled>Learn</button>
+        <label class="gens">generations <input id="gens" type="number" min="1" max="8" value="3"></label>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+    <div class="card">
+      <h2>World spec <small>validated + repaired</small></h2>
+      <div id="spec" class="kv empty">Create a world to see the spec the LLM wrote.</div>
+      <ul id="repairs" class="repairs"></ul>
+    </div>
+    <div class="card">
+      <h2>Generated world</h2>
+      <div class="preview"><img id="preview" alt="" hidden><div id="previewEmpty" class="empty">No preview yet.</div></div>
+      <div id="counts" class="counts"></div>
+    </div>
+  </section>
+  <section class="col right">
+    <div class="card">
+      <h2>2. Learning <small>held-out worlds the fixer never sees</small></h2>
+      <table id="gens-table">
+        <thead><tr><th>Gen</th><th>Params changed</th><th>Verdict</th><th>Held-out success (95% CI)</th><th>Safety viol.</th></tr></thead>
+        <tbody id="rows"><tr class="empty-row"><td colspan="5">Press Learn once the world exists.</td></tr></tbody>
+      </table>
+      <div class="chartwrap"><h3>Held-out success per generation</h3><div id="chart" class="chart"></div></div>
+      <div class="rationale"><h3>Fixer rationale <span id="ratGen"></span></h3><p id="rationale" class="empty">Waiting for the first proposal.</p></div>
+    </div>
+    <div class="card">
+      <h2>Before / after</h2>
+      <video id="video" controls muted playsinline></video>
+      <div id="videoNote" class="empty">Clips appear when out/clips/&lt;slug&gt;_gen0.mp4 and _final.mp4 exist.</div>
+    </div>
+  </section>
+</main>
+<footer><span class="live-dot"></span><span id="ticker">Idle.</span></footer>
+<script src="/static/studio.js"></script>
+</body>
+</html>
