@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intervention Zero</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff; --letter:#e9edf2; --ink:#111827; --muted:#6b7280; --line:#d6dbe3;
+  --accent:#0b6bcb; --tint:#eef4fb; --red:#c62828; --redtint:#fdecec; --green:#1b7f3b; --greentint:#e8f5ec;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--letter);overflow:hidden;font-family:var(--font);color:var(--ink)}
+#stage{position:absolute;left:50%;top:50%;width:1600px;height:900px;transform-origin:center center;
+  transform:translate(-50%,-50%) scale(1);background:var(--bg);box-shadow:0 0 40px rgba(0,0,0,.12);overflow:hidden}
+.slide{display:none;position:absolute;inset:0;width:1600px;height:900px;padding:56px 90px 70px;overflow:hidden;font-size:32px;line-height:1.3}
+.slide.active{display:block}
+h1,h2{margin:0}
+.t{font-size:68px;line-height:1.08;font-weight:800;letter-spacing:-.02em;margin-bottom:28px}
+.t em{font-style:normal;color:var(--accent)}
+.muted,.pending{color:var(--muted);font-style:italic}
+.accent{color:var(--accent)} .red{color:var(--red)} .green{color:var(--green)}
+b,strong{font-weight:600}
+code,.mono{font-family:var(--mono)}
+#counter{position:absolute;right:36px;bottom:20px;font-size:28px;color:var(--muted);z-index:5;font-variant-numeric:tabular-nums}
+
+/* s1 */
+#s1{display:none;flex-direction:column;justify-content:center}
+#s1.active{display:flex}
+#s1 blockquote{margin:0 0 56px;padding-left:36px;border-left:10px solid var(--accent);font-size:64px;line-height:1.18;font-weight:600;letter-spacing:-.01em}
+#s1 .title{font-size:132px;font-weight:800;letter-spacing:-.03em;line-height:1}
+#s1 .sub{font-size:48px;color:var(--accent);margin-top:18px;font-weight:600}
+
+/* s2 */
+.cols{display:flex;gap:70px}
+.cols>div{flex:1}
+ul.list{margin:0;padding:0;list-style:none}
+ul.list li{padding:6px 0 6px 40px;position:relative;font-size:36px}
+ul.list li:before{content:"";position:absolute;left:6px;top:21px;width:16px;height:16px;border-radius:50%;background:var(--accent)}
+.lab{font-size:32px;color:var(--muted);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+.metric{margin-top:30px;background:var(--tint);border:3px solid var(--accent);border-radius:18px;padding:22px 34px;font-size:40px;font-weight:600}
+.metric small{display:block;font-size:32px;font-weight:400;color:var(--muted);margin-top:4px}
+.step{font-size:38px;margin:0 0 16px}
+.step span{display:inline-block;width:52px;height:52px;line-height:52px;text-align:center;border-radius:50%;background:var(--red);color:#fff;font-weight:800;margin-right:16px;font-size:32px}
+
+/* s3 */
+#s3 svg{width:1420px;height:615px;display:block;margin:0 auto}
+#s3 .t{margin-bottom:16px}
+svg text{font-family:var(--font)}
+
+/* s4 */
+.tiers{flex:1.5}
+.tier{border:3px solid var(--accent);background:var(--tint);border-radius:18px;padding:14px 28px}
+.tier h3{margin:0;font-size:40px}
+.tier p{margin:0;font-size:32px;color:#374151}
+.tier.fixer{margin-left:50px}.tier.coach{margin-left:100px}
+.down{font-size:32px;color:var(--accent);padding:2px 0 2px 70px;font-weight:600}
+.locked{flex:1;border:3px solid var(--ink);border-radius:18px;padding:20px 30px;background:#f3f4f6}
+.locked h3{margin:0 0 10px;font-size:38px}
+.locked li{font-size:32px;padding:5px 0}
+.locked ul{margin:0;padding:0;list-style:none}
+.locked li:before{content:"\1F512  ";font-size:26px}
+
+/* s5 */
+.card{background:#fff;border:3px solid var(--line);border-radius:18px;padding:20px 30px;position:relative}
+.rule{font-size:36px;font-weight:600;margin:6px 0 10px}
+.stamp{display:inline-block;transform:rotate(-5deg);border:8px solid var(--red);color:var(--red);font-weight:800;font-size:60px;padding:0 24px;border-radius:12px;letter-spacing:.08em;margin:6px 0 12px;background:var(--redtint)}
+.reason{font-family:var(--mono);font-size:29px;line-height:1.3;color:var(--red);background:var(--redtint);border-radius:12px;padding:12px 18px}
+.note{font-size:32px;color:var(--muted);margin-top:12px;line-height:1.25}
+.bottom{position:absolute;left:90px;right:200px;bottom:62px;font-size:44px;font-weight:800;color:var(--red)}
+
+/* s6 */
+table.res{border-collapse:collapse;width:100%}
+table.res th,table.res td{padding:5px 14px;border-bottom:2px solid var(--line);text-align:left;font-size:32px;line-height:1.2}
+table.res th{font-weight:400}
+table.res td{font-weight:600;white-space:nowrap}
+table.res td.pending{font-weight:400}
+.src{font-size:32px;color:var(--muted);margin:10px 0 0}
+.badge-red{display:inline-block;background:var(--red);color:#fff;border-radius:8px;padding:0 12px;font-style:normal;font-weight:600;margin-left:8px}
+.media-col{margin-top:16px}
+.media{display:flex;flex-direction:row;gap:20px}
+.media figure{margin:0;flex:1;min-width:0}
+.media img{width:100%;max-height:140px;object-fit:contain;border:2px solid var(--line);border-radius:10px;display:block}
+.media figcaption{font-size:32px;line-height:1.2;color:var(--muted);text-align:center}
+.media-ph{font-size:32px;border:3px dashed var(--line);border-radius:14px;padding:24px;margin:0}
+
+/* s7 */
+.stack li{font-size:32px;line-height:1.25;padding:5px 0}
+.stack ul{margin:0;padding:0;list-style:none}
+.stack b{color:var(--accent)}
+.honest{border:3px solid var(--green);background:var(--greentint);border-radius:18px;padding:22px 30px;font-size:32px;line-height:1.3}
+.footer{position:absolute;left:90px;bottom:24px;font-size:32px}
+.ph{background:#fff7d6;border:2px dashed #b58900;border-radius:8px;padding:0 10px;font-family:var(--mono);font-size:30px}
+
+body.all{overflow:auto}
+body.all #stage{position:static;transform:none!important;height:auto;width:1600px;margin:0 auto;box-shadow:none;overflow:visible}
+body.all .slide{display:block;position:relative;margin-bottom:24px;border:2px solid var(--line)}
+body.all #s1{display:flex}
+body.all #counter{display:none}
+@media print{
+  @page{size:1600px 900px;margin:0}
+  html,body{overflow:visible;height:auto;background:#fff}
+  #stage{position:static;transform:none!important;height:auto;box-shadow:none;overflow:visible}
+  .slide{display:block;position:relative;page-break-after:always;break-after:page;border:0}
+  #s1{display:flex}
+  #counter{display:none}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<section class="slide" id="s1">
+  <blockquote>A robot that needs a human every fifth mission isn't autonomous. Intervention Zero turns every takeover into a tested, permanent fix.</blockquote>
+  <div class="title">Intervention Zero</div>
+  <div class="sub">Every takeover becomes a tested, permanent fix.</div>
+</section>
+
+<section class="slide" id="s2">
+  <h1 class="t">Robots get stuck on <em>building quirks</em></h1>
+  <div class="cols">
+    <div>
+      <div class="lab">Where they get stuck</div>
+      <ul class="list">
+        <li>A fire door that needs more force</li>
+        <li>A cart blocking a corridor</li>
+        <li>An elevator out of service</li>
+        <li>A person down</li>
+        <li>A badge door</li>
+      </ul>
+    </div>
+    <div>
+      <div class="lab">What happens today</div>
+      <p class="step"><span>1</span>A human takes over.</p>
+      <p class="step"><span>2</span>The fix is a one-off.</p>
+      <p class="step"><span>3</span>Tomorrow the robot is stuck the same way.</p>
+    </div>
+  </div>
+  <div class="metric">TFMR = takeover-free missions / missions
+    <small>measured on held-out incidents</small></div>
+</section>
+
+<section class="slide" id="s3">
+  <h1 class="t">How it works: <em>a loop that closes</em></h1>
+  <svg viewBox="0 0 1500 650" role="img" aria-label="Diagram of the improvement loop">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#374151"/></marker>
+      <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1b7f3b"/></marker>
+    </defs>
+    <!-- top row -->
+    <g stroke="#0b6bcb" stroke-width="3" fill="#eef4fb">
+      <rect x="20" y="20" width="300" height="110" rx="20"/>
+      <rect x="410" y="20" width="340" height="110" rx="20"/>
+      <rect x="840" y="20" width="300" height="110" rx="20"/>
+    </g>
+    <rect x="1228" y="20" width="260" height="110" rx="20" fill="#fdecec" stroke="#c62828" stroke-width="3"/>
+    <g font-size="26" text-anchor="middle" fill="#111827" font-weight="600">
+      <text x="170" y="84">Robot (LLM)</text>
+      <text x="580" y="68">Gateway</text><text x="580" y="102" font-size="24" font-weight="400">locked guardrails</text>
+      <text x="990" y="68">World</text><text x="990" y="102" font-size="24" font-weight="400">MuJoCo</text>
+      <text x="1358" y="84">Takeover</text>
+    </g>
+    <g stroke="#374151" stroke-width="3.5" fill="none" marker-end="url(#ah)">
+      <path d="M320 75 H408"/><path d="M750 75 H838"/><path d="M1140 75 H1226"/>
+    </g>
+    <!-- bottom row (right to left) -->
+    <g stroke="#0b6bcb" stroke-width="3" fill="#eef4fb">
+      <rect x="1236" y="260" width="244" height="130" rx="20"/>
+      <rect x="932" y="260" width="244" height="130" rx="20"/>
+      <rect x="628" y="260" width="244" height="130" rx="20"/>
+    </g>
+    <g stroke="#1b7f3b" stroke-width="3" fill="#e8f5ec">
+      <rect x="324" y="260" width="244" height="130" rx="20"/>
+      <rect x="20" y="260" width="244" height="130" rx="20"/>
+    </g>
+    <g font-size="26" text-anchor="middle" fill="#111827" font-weight="600">
+      <text x="1358" y="334">Fixer</text>
+      <text x="1054" y="318">Validator</text><text x="1054" y="352" font-size="24" font-weight="400">$jsonSchema</text>
+      <text x="750" y="308">Gate</text><text x="750" y="338" font-size="24" font-weight="400">train / held-out</text><text x="750" y="366" font-size="24" font-weight="400">safety / placebo</text>
+      <text x="446" y="334">Promotion txn</text>
+      <text x="142" y="318">change stream</text><text x="142" y="352">reload</text>
+    </g>
+    <g stroke="#374151" stroke-width="3.5" fill="none" marker-end="url(#ah)">
+      <path d="M1358 130 V258"/>
+      <path d="M1236 325 H1178"/><path d="M932 325 H874"/><path d="M628 325 H570"/><path d="M324 325 H266"/>
+      <path d="M142 260 V132"/>
+    </g>
+    <text x="1372" y="205" font-size="24" fill="#374151">proposes</text>
+    <text x="156" y="205" font-size="24" fill="#1b7f3b" font-weight="600">hot-reloads every robot</text>
+    <!-- second lane -->
+    <rect x="5" y="440" width="1010" height="205" rx="22" fill="none" stroke="#6b7280" stroke-width="3" stroke-dasharray="14 10"/>
+    <text x="30" y="478" font-size="24" fill="#6b7280" font-weight="600">Second input, same gate</text>
+    <g stroke="#6b7280" stroke-width="3" fill="#ffffff">
+      <rect x="25" y="500" width="500" height="125" rx="20"/>
+      <rect x="610" y="500" width="280" height="125" rx="20"/>
+    </g>
+    <g font-size="26" text-anchor="middle" fill="#111827" font-weight="600">
+      <text x="275" y="545">How-to videos (text)</text><text x="275" y="581" font-size="24" font-weight="400">via Bright Data / Firecrawl</text>
+      <text x="750" y="570">Candidate skills</text>
+    </g>
+    <g stroke="#6b7280" stroke-width="3.5" fill="none" marker-end="url(#ah)">
+      <path d="M525 562 H608"/>
+    </g>
+    <path d="M750 500 V392" stroke="#6b7280" stroke-width="3.5" fill="none" stroke-dasharray="10 8" marker-end="url(#ah)"/>
+    <text x="1040" y="540" font-size="24" fill="#374151">Skills face the same bar as</text>
+    <text x="1040" y="572" font-size="24" fill="#374151">any fixer proposal.</text>
+  </svg>
+</section>
+
+<section class="slide" id="s4">
+  <h1 class="t" style="font-size:64px;margin-bottom:22px">Everything that does the work <em>evolves.</em> Everything that judges is <em class="red" style="color:var(--red)">locked.</em></h1>
+  <div class="cols" style="gap:50px">
+    <div class="tiers">
+      <div class="tier"><h3>Robot</h3><p>does missions; evolved by the fixer</p></div>
+      <div class="down">&#8593; evolves</div>
+      <div class="tier fixer"><h3>Fixer</h3><p>proposes harness edits; evolved by the coach</p></div>
+      <div class="down" style="padding-left:120px">&#8593; evolves</div>
+      <div class="tier coach"><h3>Coach</h3><p>rewrites the fixer's playbook, through the same gate</p></div>
+    </div>
+    <div class="locked">
+      <h3>Locked</h3>
+      <ul>
+        <li>The gate</li>
+        <li>The validator ($jsonSchema)</li>
+        <li>The locked guardrails</li>
+        <li>The judge (MuJoCo / rules)</li>
+        <li>Held-out + safety banks</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s5">
+  <h1 class="t">The S-2 server room.</h1>
+  <div class="cols" style="gap:44px">
+    <div style="flex:0 0 640px">
+      <svg viewBox="0 0 640 430" style="width:640px;height:430px;display:block" role="img" aria-label="Floor sketch: corridor C1, S-2 human-only room, corridor C3, and a longer legal route">
+        <defs>
+          <pattern id="hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="14" height="14" fill="#fdecec"/><line x1="0" y1="0" x2="0" y2="14" stroke="#c62828" stroke-width="5"/></pattern>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1b7f3b"/></marker>
+        </defs>
+        <rect x="10" y="60" width="150" height="90" rx="10" fill="#eef4fb" stroke="#0b6bcb" stroke-width="3"/>
+        <rect x="480" y="60" width="150" height="90" rx="10" fill="#eef4fb" stroke="#0b6bcb" stroke-width="3"/>
+        <rect x="220" y="30" width="200" height="150" rx="10" fill="url(#hatch)" stroke="#c62828" stroke-width="4"/>
+        <rect x="226" y="75" width="188" height="60" rx="8" fill="#ffffff" fill-opacity=".92"/>
+        <g font-size="24" text-anchor="middle" fill="#111827" font-weight="600">
+          <text x="85" y="114">C1</text><text x="555" y="114">C3</text>
+          <text x="320" y="102" fill="#c62828">S-2</text>
+          <text x="320" y="128" font-size="22" fill="#c62828" font-family="ui-monospace,Consolas,monospace">human_only</text>
+        </g>
+        <path d="M160 105 H220 M420 105 H480" stroke="#c62828" stroke-width="5" stroke-dasharray="8 6" fill="none"/>
+        <text x="320" y="218" font-size="24" text-anchor="middle" fill="#c62828" font-weight="600">S-2-door: 2 m shortcut</text>
+        <path d="M85 150 V330 H555 V152" fill="none" stroke="#1b7f3b" stroke-width="6" stroke-dasharray="14 8" marker-end="url(#ah2)"/>
+        <text x="320" y="375" font-size="24" text-anchor="middle" fill="#1b7f3b" font-weight="600">longer legal route around</text>
+      </svg>
+    </div>
+    <div class="card" style="flex:1">
+      <div class="lab" style="font-size:28px;margin:0">Naive fixer proposal</div>
+      <div class="rule">&ldquo;Robots can cut through S-2 to save time&rdquo;</div>
+      <div class="stamp">REFUSED</div>
+      <div class="reason">MongoDB $jsonSchema validator: document failed validation. human_only is not an allowed zone kind; never_enter_human_only is locked to true</div>
+      <div class="note">Local mirror reports: <span class="mono" style="font-size:28px">rule &lt;id&gt; grants human_only access</span></div>
+    </div>
+  </div>
+  <div class="bottom">The fix never reaches the gate. The database says no.</div>
+</section>
+
+<section class="slide" id="s6">
+  <h1 class="t">Results</h1>
+  <div>
+    <div>
+<!-- RESULTS:BEGIN -->
+    <table class="res">
+      <tr data-key="baseline_tfmr"><th>Baseline TFMR (held-out)</th><td class="pending">pending</td></tr>
+      <tr data-key="evolved_tfmr"><th>Evolved TFMR (held-out)</th><td class="pending">pending</td></tr>
+      <tr data-key="placebo_tfmr"><th>Placebo TFMR (held-out)</th><td class="pending">pending</td></tr>
+      <tr data-key="n"><th>Held-out missions n</th><td class="pending">pending</td></tr>
+      <tr data-key="seeds"><th>Seeds</th><td class="pending">pending</td></tr>
+      <tr data-key="ci"><th>95% CI (Wilson)</th><td class="pending">pending</td></tr>
+      <tr data-key="safety_violations"><th>Safety violations after promotion</th><td class="pending">pending</td></tr>
+      <tr data-key="drift_latency"><th>Drift detection latency</th><td class="pending">pending</td></tr>
+      <tr data-key="kill_resume"><th>Kill -9 resume</th><td class="pending">pending</td></tr>
+    </table>
+    <p class="src">Source: out/results.json (not yet generated)</p>
+<!-- RESULTS:END -->
+    </div>
+    <div class="media-col">
+<!-- MEDIA:BEGIN -->
+<p class="pending media-ph">MuJoCo cart clip frames: pending (docs/media/cart_before.png, cart_after.png)</p>
+<!-- MEDIA:END -->
+    </div>
+  </div>
+</section>
+
+<section class="slide" id="s7">
+  <h1 class="t">Stack, and what is real</h1>
+  <div class="cols" style="gap:50px">
+    <div class="stack" style="flex:1.45">
+      <ul>
+        <li><b>MongoDB Atlas</b> $jsonSchema, transactions, change streams, vector + text search, $rankFusion, time series, $setWindowFields, $graphLookup, $merge</li>
+        <li><b>Voyage AI</b> embeddings + rerank</li>
+        <li><b>Anthropic Claude</b> robot, fixer, coach</li>
+        <li><b>MuJoCo</b> door/cart physics + clips</li>
+        <li><b>Raindrop</b> events, signals, read-back</li>
+        <li><b>Bright Data / Firecrawl</b> how-to text</li>
+      </ul>
+    </div>
+    <div class="honest" style="flex:1">
+      <b>The world is a simulator we wrote.</b> No real robot or building. <b>Real:</b> the loop, the gate, the database guardrails, the telemetry. Every number comes from out/results.json; anything else says <span class="pending">pending</span>.
+    </div>
+  </div>
+  <div class="footer">Repo: <span class="ph"><!-- REPO_URL -->github.com/TBD<!-- /REPO_URL --></span> <span class="muted" style="font-size:28px">(placeholder)</span></div>
+</section>
+
+</div>
+<div id="counter">1 / 7</div>
+<script>
+(function(){
+  var N=7, cur=0, stage=document.getElementById('stage'), counter=document.getElementById('counter');
+  var slides=Array.prototype.slice.call(document.querySelectorAll('section.slide'));
+  function fit(){
+    var s=Math.min(window.innerWidth/1600, window.innerHeight/900);
+    stage.style.transform = document.body.classList.contains('all') ? 'none' : 'translate(-50%,-50%) scale('+s+')';
+  }
+  function show(i, noHash){
+    cur=Math.max(0,Math.min(N-1,i));
+    slides.forEach(function(el,k){ el.classList.toggle('active', k===cur); });
+    counter.textContent=(cur+1)+' / '+N;
+    if(!noHash){ try{ history.replaceState(null,'','#'+(cur+1)); }catch(e){ location.hash='#'+(cur+1); } }
+  }
+  function fromHash(){
+    var n=parseInt((location.hash||'').replace('#',''),10);
+    show(isNaN(n)?0:n-1, true);
+  }
+  document.addEventListener('keydown',function(e){
+    var k=e.key;
+    if(k==='ArrowRight'||k==='PageDown'||k===' '||k==='Spacebar'){ e.preventDefault(); show(cur+1); }
+    else if(k==='ArrowLeft'||k==='PageUp'){ e.preventDefault(); show(cur-1); }
+    else if(k==='Home'){ e.preventDefault(); show(0); }
+    else if(k==='End'){ e.preventDefault(); show(N-1); }
+    else if(k==='p'||k==='P'){ document.body.classList.toggle('all'); fit(); }
+  });
+  stage.addEventListener('click',function(e){
+    if(document.body.classList.contains('all')) return;
+    if(e.target.closest && e.target.closest('a')) return;
+    show(cur+1);
+  });
+  window.addEventListener('resize',fit);
+  window.addEventListener('hashchange',fromHash);
+  fit(); fromHash();
+})();
+</script>
+</body>
+</html>
