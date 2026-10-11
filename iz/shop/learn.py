@@ -251,9 +251,10 @@ def run_learning(generations: int = 5, train_seeds=range(0, 8), heldout_seeds=ra
     (out / "shop_history.json").write_text(json.dumps(history, indent=2, default=str), encoding="utf-8")
     feedback = None
     for gen in range(1, generations + 1):
-        train_fails = [r for r in tr if not _ok(r)]
-        fails = train_fails or [r for r in ho if not _ok(r)]
-        for r in tr + ho:
+        # The fixer only ever sees TRAIN takeovers; held-out seeds stay unseen (verifier fix:
+        # previously fell back to held-out failure records when train was fully solved).
+        fails = [r for r in tr if not _ok(r)]
+        for r in tr:
             if not _ok(r):
                 ev.emit("takeover", {"gen": gen, "seed": r.get("seed"), "failure": r.get("failure"),
                                      "status": r.get("status"), "operator_tip": r.get("operator_tip"),
@@ -278,7 +279,11 @@ def run_learning(generations: int = 5, train_seeds=range(0, 8), heldout_seeds=ra
             store(genome_id, parent_id, params, gen)
             ev.emit("promoted", {"gen": gen, "genome_id": genome_id, "parent": parent_id,
                                  "params": params, "edits": prop["edits"]})
-        feedback = {"gen": gen, "edits": prop["edits"], "verdict": g["verdict"], "reason": g["reason"]}
+        # feedback to the fixer carries no held-out numbers (only which gate clause fired)
+        clause = ("safety" if g["safety_violations"] else "regression" if g["regressions"]
+                  else "no_heldout_gain" if g["verdict"] == "REJECT" else "promoted")
+        feedback = {"gen": gen, "edits": prop["edits"], "verdict": g["verdict"], "clause": clause,
+                    "train": g["train"]}
         h = {"gen": gen, "params": dict(params), "train_rate": sum(map(_ok, tr)) / max(1, len(tr)),
              "heldout_rate": sum(map(_ok, ho)) / max(1, len(ho)),
              "heldout_success": sum(map(_ok, ho)), "heldout_n": len(ho),
