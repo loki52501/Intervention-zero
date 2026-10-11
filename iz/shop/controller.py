@@ -32,6 +32,8 @@ DEFAULT_PARAMS = {
     "spill_speed": 1.4,
     "push_force_limit_n": 220,
     "reach_height_m": 1.0,
+    "gait_cadence_hz": 1.6,    # G1 gait engine (iz/robot/gait.py); no effect on capsule models
+    "stride_scale": 0.8,
 }
 
 PARAM_BOUNDS = {
@@ -43,6 +45,8 @@ PARAM_BOUNDS = {
     "spill_speed": (0.1, 1.6),
     "push_force_limit_n": (60, 300),
     "reach_height_m": (0.5, 1.5),
+    "gait_cadence_hz": (1.0, 2.4),
+    "stride_scale": (0.4, 1.2),
 }
 
 # Never evolvable. Enforced in ShopController (params cannot touch these).
@@ -184,6 +188,18 @@ class ShopController:
         self._face_phase = None
         self._face = 0.0
         self._hand_rel = np.array([0.5, 0.0])
+
+        # --- G1 legs (only when leg actuators exist; capsule models have none) ---
+        self._gait_acts = {}
+        for i in range(m.nu):
+            an = mujoco.mj_id2name(m, O.mjOBJ_ACTUATOR, i)
+            if an and an.startswith("act_") and an.endswith("_joint") and \
+                    any(k in an for k in ("hip_pitch", "hip_roll", "knee", "ankle_pitch")):
+                self._gait_acts[an[4:]] = i
+        self._gait = None
+        if self._gait_acts:
+            from iz.robot.gait import GaitEngine
+            self._gait = GaitEngine({k: self.params[k] for k in ("gait_cadence_hz", "stride_scale")})
 
     # ------------------------------------------------------------ sensors
     def read(self, name):
@@ -394,6 +410,9 @@ class ShopController:
             self._drive_arm(np.zeros(2), dt)
             self.done = True
 
+        if self._gait_acts:
+            self._apply_gait(dt)
+
         if t >= self._next_trace:
             self._next_trace = t + TRACE_DT
             self.trace.append({
@@ -405,6 +424,21 @@ class ShopController:
                 "wrist_force": round(self.wrist_force(), 2),
                 "min_shopper_dist": round(self.min_shopper_dist, 3) if np.isfinite(self.min_shopper_dist) else None,
             })
+
+    def _apply_gait(self, dt):
+        """Parametric gait engine (NOT a learned policy) drives the G1 leg actuators.
+        Arm swing only while walking to the cart, never while pushing or reaching."""
+        d = self.data
+        wz = float(d.ctrl[self._act["act_wz"]])
+        targets = self._gait.step(dt, float(self.speed_cmd), wz)
+        for j, a in self._gait_acts.items():
+            if j in targets:
+                d.ctrl[a] = targets[j]
+        if self.state == GO_TO_CART:
+            for n in ("l_shoulder", "r_shoulder"):
+                a = self._act.get("act_" + n, -1)
+                if a >= 0 and n in targets:
+                    d.ctrl[a] = targets[n]
 
     # ---------------------------------------------------------- states
     def _go_to_cart(self, t, dt, base, yaw):

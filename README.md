@@ -120,3 +120,5 @@ Built with Claude Code: Opus orchestrators plus Sonnet coders, human-directed.
 ## License
 
 MIT. See `LICENSE`.
+
+Robot model: Unitree G1 from MuJoCo Menagerie (google-deepmind/mujoco_menagerie), license per iz/robot/LICENSE_NOTES.md; locomotion is a parametric gait engine, not a learned policy.

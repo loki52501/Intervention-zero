@@ -15,6 +15,12 @@ Seeds >= 200 produce a dense-shopper layout (safety bank).
 Arm kinematics: shoulder/elbow axes are along the robot x axis, so each arm swings sideways
 (right arm towards robot -y).  Pick: robot yaw meta["pick_yaw"]; place into cart: yaw
 meta["place_yaw"] (pi/2, right side faces the cart ahead).
+Robot body: env ROBOT_BODY=g1 swaps the capsule robot for the Unitree G1 (MuJoCo Menagerie)
+kinematic puppet from iz.robot.g1; unset or "capsule" gives the capsule robot (byte-identical).
+The G1 bits use the same collision layout (hidden proxies base_g/waist_g/torso_g/head_g 4 vs 17,
+hand spheres 32 vs 8, legs and feet 0/0).  The G1 arm is sagittal (reaches forward), so in g1
+mode pick_yaw = side*pi/2 (face the shelf) and place_yaw = 0 (face the cart).  Locomotion is a
+parametric gait engine (iz/robot/gait.py), not a learned policy.
 """
 import math
 import random
@@ -50,6 +56,24 @@ def _xyaxes(pos, target):
     x /= np.linalg.norm(x)
     y = np.cross(x, d)
     return _f(*x, *y)
+
+
+def _robot_mode():
+    """'g1' only when ROBOT_BODY=g1 is set explicitly (and the model exists); else 'capsule'."""
+    import os
+    if os.environ.get("ROBOT_BODY", "").strip().lower() != "g1":
+        return "capsule"
+    from iz.robot import robot_body
+    return robot_body()
+
+
+def robot_header_parts():
+    """(compiler_attr, default_xml, asset_xml) the robot needs in the MJCF header; empty for capsule."""
+    if _robot_mode() != "g1":
+        return "", "", ""
+    from iz.robot import g1
+    _, _, ra = g1.build_robot_xml(0, (0.0, 0.0), 0.0)
+    return f' meshdir="{ra["meshdir"]}"', ra["default_xml"], ra["asset_xml"]
 
 
 def _seg_point(rng, a, b, lo=0.2, hi=0.8):
@@ -97,6 +121,14 @@ def build_shop(seed: int, cart_mass_kg=None, n_shoppers=None):
     cart_xy = [-4.3, cy]
     robot_xy = [cart_xy[0] - GRIP_OFFSET - rng.uniform(0.15, 0.45), cy + rng.uniform(-0.8, 0.8)]
     pick_yaw = 0.0 if side < 0 else math.pi
+    place_yaw = math.pi / 2
+    mode = _robot_mode()
+    g1_frag = g1_meta = g1_assets = None
+    if mode == "g1":
+        from iz.robot import g1 as _g1
+        g1_frag, g1_meta, g1_assets = _g1.build_robot_xml(0, robot_xy, 0.0)
+        pick_yaw = side * math.pi / 2          # face the shelf; the sagittal right arm reaches forward
+        place_yaw = 0.0                        # face the cart
 
     wps = [[cart_xy[0] - GRIP_OFFSET, cy]]                     # 0 grip pose
     for a in AISLE_YS:                                         # entry nodes 1..3
@@ -104,6 +136,11 @@ def build_shop(seed: int, cart_mass_kg=None, n_shoppers=None):
     for a in AISLE_YS:                                         # exit nodes 4..6
         wps.append([3.6, a])
     pick_xy = [pick_x, ay + side * 0.2]   # hug the product side so the arm reaches
+    if mode == "g1":
+        # facing the shelf, robot-frame y maps to world (-side, 0): shift so the right shoulder
+        # (robot y = shoulder_xyz[1]) lines up with the product; standoff 0.2 m from the aisle
+        # axis keeps cart (half width 0.28) and torso_g proxy clear of the 0.16 m ledges.
+        pick_xy = [pick_x + side * g1_meta["arm"]["shoulder_xyz"][1], ay + side * 0.2]
     wps.append(pick_xy)                                        # 7 pick point
     checkout_robot = [3.6, -2.3]
     wps.append(checkout_robot)                                 # 8 checkout (robot)
@@ -140,7 +177,7 @@ def build_shop(seed: int, cart_mass_kg=None, n_shoppers=None):
         grip_body="robot", grip_offset=GRIP_OFFSET, hand_body="r_hand_b",
         target_product="prod_0", target_xy=[pick_x, prod_y], target_z=prod_z,
         target_aisle=aisle, shelf_side=side, shelf_index=shelf_i, ledge_z=ledge_z,
-        pick_xy=pick_xy, pick_yaw=pick_yaw, place_yaw=math.pi / 2,
+        pick_xy=pick_xy, pick_yaw=pick_yaw, place_yaw=place_yaw,
         waypoints=wps, route=route, checkout_xy=checkout_xy, checkout_robot_xy=checkout_robot,
         checkout_heading=-math.pi / 2, spills=spills, shopper_paths=paths, n_shoppers=n_sh,
         cart_mass_kg=mass, store_half=[STORE_HX, STORE_HY], aisle_ys=AISLE_YS,
@@ -246,8 +283,10 @@ def build_shop(seed: int, cart_mass_kg=None, n_shoppers=None):
       <camera name="cam_follow" mode="trackcom" pos="-2.8 -3.6 3.0" xyaxes="{_xyaxes((-2.8, -3.6, 3.0), (0, 0, 0.8))}" fovy="55"/>
     </body>
 """)
+    if mode == "g1":
+        A[-1] = "    " + g1_frag + "\n"       # starts with '    <body name="robot"' (worldgen slices on it)
     cmass = mass
-    com_z = (8 * 0.42 + max(cmass - 8, 1) * 0.98) / cmass          # loaded -> higher CoM
+    com_z =(8 * 0.42 + max(cmass - 8, 1) * 0.98) / cmass          # loaded -> higher CoM
     ih = 1.0
     Ixx = cmass * (0.56 ** 2 + ih ** 2) / 12 + 0.5
     Iyy = cmass * (0.9 ** 2 + ih ** 2) / 12 + 0.5
@@ -314,4 +353,19 @@ def build_shop(seed: int, cart_mass_kg=None, n_shoppers=None):
   </sensor>
 </mujoco>
 """)
-    return "".join(A), meta
+    out = "".join(A)
+    meta["robot_body"] = mode
+    if mode == "g1":
+        meta["arm"] = g1_meta["arm"]
+        out = out.replace('<compiler angle="radian" autolimits="true"/>',
+                          f'<compiler angle="radian" autolimits="true" meshdir="{g1_assets["meshdir"]}"/>', 1)
+        out = out.replace("  <asset>\n", "  " + g1_assets["default_xml"] + "\n  <asset>\n", 1)
+        out = out.replace("  </asset>\n", "    " + g1_assets["asset_xml"] + "\n  </asset>\n", 1)
+        a0, a1 = out.index("    <velocity name=\"act_vx\""), out.index("  </actuator>")
+        out = out[:a0] + "    " + g1_assets["actuator_xml"] + "\n" + out[a1:]
+        s0, s1 = out.index("    <rangefinder name=\"rf_front\""), out.index("  </sensor>")
+        tail = ('    <rangefinder name="rf_cart" site="cart_front" cutoff="8"/>\n'
+                '    <framezaxis name="cart_up" objtype="body" objname="cart"/>\n'
+                '    <framepos name="cart_pos" objtype="body" objname="cart"/>\n')
+        out = out[:s0] + "    " + g1_assets["sensor_xml"] + "\n" + tail + out[s1:]
+    return out, meta

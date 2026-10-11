@@ -15,3 +15,5 @@ out/
 *.png
 !docs/**/*.png
 .claude/settings.local.json
+
+assets/menagerie/
