@@ -89,10 +89,13 @@ def keyword_spec(prompt: str) -> dict:
     nsp = 0
     if wet and not re.search(r"\b(no|without|dry)\b[^,]*\b(spill|wet|puddle)", p):
         nsp = 3 if any(w in p for w in ("many", "several", "puddles", "spills")) else 1
-        if "two" in p and ("spill" in p or "puddle" in p):
+        if re.search(r"\b(two|2)\s+(\w+\s+)?(spills|puddles|wet)", p):  # not "two narrow aisles"
             nsp = 2
     mass = 25.0
-    if any(w in p for w in ("heavy", "loaded", "full cart", "overloaded")):
+    mkg = re.search(r"(\d+(?:\.\d+)?)\s*(?:kg|kilo)", p)
+    if mkg:  # explicit mass is clamped to the safe envelope by repair_spec
+        mass = float(mkg.group(1))
+    elif any(w in p for w in ("heavy", "loaded", "full cart", "overloaded")):
         mass = 45.0
     elif any(w in p for w in ("light", "empty cart")):
         mass = 10.0
@@ -602,6 +605,10 @@ def main(argv=None) -> None:
     ap.add_argument("--no-learn", action="store_true")
     ap.add_argument("--out", default="out")
     a = ap.parse_args(argv)
+    try:  # verifier fix: logs were empty when stdout was redirected (block buffering)
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     run(a.prompt, a.generations, a.fake_llm, a.live, not a.no_learn, a.out)
 
 
