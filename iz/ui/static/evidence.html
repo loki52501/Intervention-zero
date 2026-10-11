@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence - How the Robot Learns</title>
+<link rel="stylesheet" href="/static/evidence.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>How the robot learns</h1>
+    <p class="sub">Live evidence from MongoDB Atlas and Raindrop. Every number below is a live query.</p>
+  </div>
+  <div class="meta"><span id="dot" class="dot"></span><span id="stamp">connecting...</span><span id="dbname"></span></div>
+</header>
+<main>
+  <section id="s-loop"><h2><span class="n">1</span>The learning loop, in MongoDB</h2><div id="loop" class="pipeline"></div></section>
+  <section id="s-safety"><h2><span class="n">2</span>Safety enforced by the database</h2><div id="safety"></div></section>
+  <section id="s-memory"><h2><span class="n">3</span>Robot memory (4 types)</h2><div id="memory" class="grid4"></div><div id="card"></div></section>
+  <section id="s-recall"><h2><span class="n">4</span>Hybrid recall</h2>
+    <form id="rf"><input id="q" placeholder="Search past takeovers, e.g. wet floor near elevator" autocomplete="off"><button>Recall</button></form>
+    <div id="recall"></div></section>
+  <section id="s-raindrop"><h2><span class="n">5</span>Raindrop</h2><div id="raindrop"></div></section>
+</main>
+<script src="/static/evidence.js"></script>
+</body>
+</html>

@@ -27,16 +27,32 @@ decisions:   # agreed with Lokesh during brainstorming, 13:40-13:52
     budget: "RAINDROP_ENABLED=0 by default; <900 events total; replays/gate never log events"
   - id: D5
     what: "Atlas Agent Engine memory: try in parallel (Lokesh does CLI login); abandon 14:30 if not returning memories"
+  - id: D10
+    agreed: "15:35 PT with Lokesh; launched 15:45"
+    what: >
+      One prompt -> any world -> a humanoid fleet learns. Robot = Unitree G1 (MuJoCo Menagerie MJCF) mounted on
+      planar base joints base_x/base_y/base_yaw (contract unchanged); legs via parametric gait engine, arms via G1
+      shoulder/elbow joints with 2-link IK. WorldSpec v2: terrain (flat/rough hfield/slope/steps/ramp), obstacles,
+      hazards, people, lighting, domain randomization (friction U[0.4,1.0], mass x U[0.9,1.1], pushes 5-10 s at
+      0.1-1.0 m/s, joint noise U[-0.03,0.03] rad, latency 0-3 steps). Fleet: 2-3 G1s share an Atlas
+      fleet_blackboard (hazards, blocked lanes, task claims via findOneAndUpdate) + right-of-way rule. Curriculum:
+      world coach promotes spec at held-out >= 80 %, demotes < 50 % (Rudin et al. 2021; OMNI-EPIC loop shape).
+    honesty: "locomotion is a gait engine, not a learned walking policy; learning happens at behaviour, environment and fleet level"
+    schedule_change: >
+      Main compressed D10 timeline to protect the 17:00 submission (non-negotiable 8): robot/world/fleet hard cut
+      16:10, loop 16:20, docs + FREEZE 16:30, video/push/submit 16:30-16:55. Lokesh may revert to 16:45.
+    cuts: "fleet -> 1 robot no blackboard; loop -> 2 generations; G1 clone fails -> capsule body + capsule legs on same gait engine (say so)"
   - id: D6
     what: "Situation templates cut to 8 solid ones incl. the 4 anchors (fire door D-17, cart C2, server room S-2, renovation drift)"
 
 milestones:
-  M0_setup:        {status: in_progress, owner: main, target: "14:05"}
-  M1_contracts:    {status: todo, owner: main, target: "14:10", file: iz/types.py}
-  M2_world:        {status: todo, owner: orch-world, target: "14:50"}
-  M2_physics:      {status: todo, owner: orch-world, target: "15:00"}
-  M2_store:        {status: todo, owner: orch-store, target: "14:50"}
-  M3_agent_loop:   {status: todo, owner: orch-loop, target: "15:30"}
+  M0_setup:        {status: done, owner: main, target: "14:05", commit: 388c662}
+  M1_contracts:    {status: done, owner: main, target: "14:10", file: iz/types.py}
+  M2_world:        {status: in_progress, owner: orch-world, target: "14:50", workflow: wf_e87bd48d-429}
+  M2_physics:      {status: in_progress, owner: orch-world, target: "15:00"}
+  M2_store:        {status: in_progress, owner: orch-store, target: "14:50"}
+  M2_core:         {status: in_progress, owner: orch-core, target: "14:50", note: "llm, agent, gateway, harness, gate, fixer, coach"}
+  M3_agent_loop:   {status: todo, owner: wave2, target: "15:30", note: "campaign, drift, consolidate, kill-resume, ablation"}
   M4_drift_resume_ablation: {status: todo, owner: orch-loop, target: "16:00"}
   M4_ui:           {status: todo, owner: orch-ui, target: "16:00"}
   M5_freeze:       {status: todo, owner: main, target: "16:05"}
@@ -44,15 +60,38 @@ milestones:
 facts:
   python: "3.13.6 in .venv"
   docker: "29.7.2 running"
-  raindrop_write_key: "present in .env (never print)"
-  mongodb_uri: "missing"
-  voyage_key: "missing"
+  atlas: "connected, server 8.0.34"
+  voyage: "voyage-4-large embed OK, 1024 dims"
+  raindrop: "write + query keys set; SDK init OK; no events sent yet"
+  mujoco: "3.15.0 physics + offscreen render OK on this machine (spike 14:01)"
+  agentengine_cli: "0.1.119 installed"
   llm_key: "missing (provider not chosen)"
 
 open_questions:
   - "LLM provider + model names for robot and fixer"
-  - "Atlas URI, DB user, IP access; Voyage model API key"
-  - "Raindrop Query API key; Pro available?"
+  - "Raindrop Pro available?"
 
 log:
   - "13:53 repo + venv created, deps installing"
+  - "14:01 deps installed; mujoco spike OK (render works; spike door hinge range had wrong sign)"
+  - "14:02 first commit 388c662 (scaffold + types.py)"
+  - "14:04 wave 1 workflow launched (3 opus orchestrators x up to 3 sonnet coders)"
+  - "14:13 wave 2a launched: UI demo stage, README/DESIGN skeletons, MCP body (docs + mcp committed by 14:34)"
+  - "14:27 Lokesh chose VIDEO SKILLS over coach-as-extra (D7): public how-to text via Bright Data/Firecrawl -> distilled rules -> same gate; no video frames (image-analyzer ban + YouTube ToS); filmstrips come from our own MuJoCo sims"
+  - "14:28 Atlas briefly unreachable (IP change); fixed by Lokesh 14:33. Agent Engine dropped at 14:30 cutoff (no login)."
+  - "14:30 wave 2b launched (10 agents): campaign, drift, consolidate, ablate, kill-resume, harvest, distill, e2e"
+  - "14:53 scripts/view3d.py: live MuJoCo window (building tour w/ 4 robots; door physics before/after). UI on 127.0.0.1:8765 (8080 taken by Docker), agent board 8799 (scratchpad helper)"
+  - "14:57 wave 2a DONE: UI 65a0dd1 (7 tests), docs dfe37de, mcp 2f04a2d (5 tests). Open: UI live mode needs contract events in out/events.jsonl (iz/obs/events.py from wave 2b); use file mode, not UI_SOURCE=mongo (feed.emit format differs); README run commands must be fixed in final pass"
+  - "15:00 wave 1 DONE (15 agents, 0 errors). world 1d980dc 126 tests; store db47deb 38 tests; core 696c918 40 tests. Naive baseline TFMR seed0: rule 172/270=63.7% (CI 57.8-69.2), physics 170/270=63.0% (CI 57.1-68.5), 4 safety violations by naive robot. Hybrid path on 8.0.34 = native $rankFusion + Voyage rerank-2.5. Atlas indexes ready in intervention_zero + iz_test. 10 situation templates (D6 superseded). Raindrop round-trip verified 15:00 (1 event + 2 signals visible in 7.2 s; 27c14ef)"
+  - "15:06 SHOP workflow launched (wf_eb48b153-12a, D8): human-like wheeled retail robot in MuJoCo store, cart + product + checkout, real sensors (rangefinders, touch, wrist force, IMU, cart tilt) + force-limited actuators; controller params are the genome; LLM fixer + gate learn from sensor-trace takeovers; live viewer scripts/shop_live.py. Honest claim: learns driving params, not motor control. Hard cut: if not green by 15:50, demo stays on facilities world + view3d."
+  - "15:08 wave 3 DONE (15 agents): filmstrip 1a2cf00, slides 9f5175a, video 00f8f80 (no TTS key), raindrop 27c14ef, atlas 9b4cb5d (14/15 features verified live; ui_events not capped in main db) — atlas commit made by main after classifier blocked agent commit"
+  - "15:10 CORE OBJECTIVE stated by Lokesh (D9): one prompt -> simulation environment -> robots learn in it via harness with AI model as brain. Worldgen workflow launched (wf_ae844f0f-9fb): prompt -> validated WorldSpec (LLM, never raw MJCF) -> MuJoCo world from primitive library on the shop contract -> learning via iz/shop. Pitch: 'describe any environment in one sentence; the robot learns to work in it, safely, by itself.'"
+  - "15:44 status: loop 64eca27, worldgen 629b266, robotmem 109242f committed; shop integrator + e2e still running"
+  - "15:46 D10 workflow launched (wf_6797ac9a-7e9): orch-robot (G1), orch-world (spec v2/terrain/DR), orch-fleet (blackboard/coordination) in parallel, each 1 opus plan -> <=3 sonnet coders -> opus integrate; then orch-loop (curriculum + demo_worlds + results.json), then orch-docs. Freeze 16:30 (compressed)."
+  - "15:55 REAL RESULTS (e2e f3069b7; real Anthropic haiku robot + sonnet fixer, MuJoCo physics judge, Atlas): campaign e2e1 4 days x 3 sites, 144 missions, TFMR 0.875 overall, 19 takeovers, 2 promotions (held-out 26->28/40, 30->31/40, regression bank 13/13), 6 rejections with reasons (4x regression, 1x no held-out gain, 1x no edits), naive S-2 candidate refused by Atlas $jsonSchema validator, 12 video-skill citations in fixer proposals, 87 context tokens/decision. Ablation fresh seeds 9100-9101, n=80 per arm: baseline 55/80=68.8% (57.9-77.8), evolved 61/80=76.2% (65.9-84.2), placebo 46/80=57.5%, random 53/80=66.2%, 0 safety violations; CIs overlap -> not significant (say so). Kill-resume passed (fake LLM). Drift not reached, coach not run. LLM spend ~$1.72 est. Tests 303 pass / 1 flaky."
+  - "15:55 SHOP red: 0/10 success naive and cautious (collisions, too_close_to_person, timeouts); held-out leak fixed by verifier. WORLDGEN partial: prompt->spec->worlds works (19-20/20 valid, real LLM), CLI uses stock shop layout, learning 0% so every fix rejected on safety. Honest framing: prompt->world + humanoid are pipeline/visual demos; measured learning result = facilities campaign."
+  - "15:58 ROBOTMEM partial/red (109242f, e22ffbd): card + 4 memory types work in Atlas ($rankFusion recall verified, 6 indexes ready, robot card stored, live tour wrote 15 episodes, 9 facts, taxonomy counts shared across envs) but 0 procedures because shop robot never succeeds -> no warm-vs-cold transfer result. Do not claim transfer."
+  - "16:04 STUDIO workflow launched (wf_a23f6791-061): opus shop-fix (stable cart push, working arm pick/place, calibrate so good params succeed >=60%, naive <=40%, then real learning), sonnet Prompt Studio screen (/studio: prompt -> spec -> preview -> live learning table + before/after clip), opus integrator, opus video recorder -> out/video/final_silent.mp4 + shots.txt. Stop 16:30; video 16:30-16:45; push + submit 16:45-16:55."
+  - "16:09 Lokesh approved creating PUBLIC GitHub repo intervention-zero + push. History secret scan: 0 hits, no .env tracked. gh keyring login expired -> waiting for Lokesh to run gh auth login."
+  - "16:11 EVIDENCE workflow (wf_3247d232-93a): /evidence page showing live Atlas learning loop (takeovers->decisions->genome lineage), DB refusal, 4 memory types, hybrid recall box, Raindrop read-back. 16:12 real campaign final1 (2 days x 3 missions, RAINDROP_ENABLED via --raindrop) started to produce real Raindrop telemetry."
+  - "14:35 wave 3 launched (5 opus+sonnet pairs): filmstrips, slides, video kit, raindrop live check, atlas feature verifier"

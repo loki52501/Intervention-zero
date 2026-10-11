@@ -24,6 +24,8 @@ app = FastAPI(title="Intervention Zero UI")
 STATIC.mkdir(parents=True, exist_ok=True)
 from iz.ui.studio import router as studio_router  # noqa: E402
 app.include_router(studio_router)
+from iz.ui.evidence import router as evidence_router  # noqa: E402
+app.include_router(evidence_router)
 app.mount("/static", StaticFiles(directory=STATIC, check_dir=False), name="static")
 
 

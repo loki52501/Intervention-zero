@@ -278,6 +278,10 @@ class ShopController:
             m.eq_data[eq, 0:3] = 0.0
             m.eq_data[eq, 3:6] = rel
             m.eq_data[eq, 6:10] = qrel
+            if eq == self._eq_cart and m.eq_data.shape[1] > 10:
+                # stable pushing: full rotational coupling so the cart stays rigidly
+                # aligned behind the hands instead of pivoting/jackknifing on the grip
+                m.eq_data[eq, 10] = 1.0
         d.eq_active[eq] = 1 if active else 0
 
     def _drive(self, target, speed, yaw_rate_max=YAW_RATE_MAX):
@@ -501,15 +505,44 @@ class ShopController:
         elif hz < 2 * bd:
             speed *= (hz - bd) / bd
             self.braking = True
+        # a full stop that lasts too long becomes a slow creep (shoppers wait for the robot,
+        # so waiting forever is a deadlock); the creep still respects the locked clearance
+        if self.yielding or (self.braking and speed == 0.0):
+            self._brake_t += dt
+        else:
+            self._brake_t = 0.0
         if self.yielding:
             speed = 0.0
             wz = 0.0
+            # only shoppers AHEAD of the cart block; one beside/behind may be passed slowly
+            h = np.array([math.cos(yaw), math.sin(yaw)])
+            cxy = self.cart_pos()[:2]
+            ahead = any(float((s - cxy) @ h) > -0.2 for s in self.shopper_positions()
+                        if np.linalg.norm(s - cxy) < P["yield_distance_m"] + 0.6)
+            if self._brake_t > 1.5 and not ahead and \
+                    self.min_shopper_dist > LOCKED["min_person_clearance_m"] + 0.6:
+                speed = 0.2
         # ramp up only
         if speed > self._speed:
             speed = min(speed, self._speed + ACCEL * dt)
         self._speed = speed
         self.speed_cmd = speed
         self._apply_base(speed, yaw, wz)
+        # cross-track correction: hold robot AND cart on the segment centreline (aisle
+        # centre) using the holonomic base, so the rigid cart never drifts into a shelf
+        prev = route[self._wp - 1] if self._wp > 0 else None
+        if prev is not None and speed > 0.0:
+            seg = target - prev
+            L = float(np.linalg.norm(seg))
+            if L > 1e-6:
+                u = seg / L
+                nrm = np.array([-u[1], u[0]])
+                cxy = self.cart_pos()[:2]
+                e = 0.5 * float((base - prev) @ nrm) + 0.5 * float((cxy - prev) @ nrm)
+                vl = max(-0.35, min(0.35, -1.5 * e))
+                d = self.data
+                d.ctrl[self._act["act_vx"]] += vl * nrm[0]
+                d.ctrl[self._act["act_vy"]] += vl * nrm[1]
 
     def _at_shelf(self, t, dt, base, yaw):
         d = self.data
@@ -519,8 +552,11 @@ class ShopController:
             tgt = np.array([prod[0], prod[1], self.params["reach_height_m"]])
             self._servo_hand(t, dt, tgt, base, yaw)
             hand = self.hand_pos()
-            if (self.touch() > 0.5 and np.linalg.norm(hand - prod) < 0.25) or \
-                    np.linalg.norm(hand - prod) < 0.12:
+            if not hasattr(self, "_t_reach") or self._t_reach is None:
+                self._t_reach = t
+            dh = float(np.linalg.norm(hand - prod))
+            if (self.touch() > 0.5 and dh < 0.25) or dh < 0.12 or \
+                    (t - self._t_reach > 4.0 and dh < 0.4):   # within reach: close the grip
                 self._grip(self._eq_prod, True)
                 self._phase = "PLACE"
                 self._last_solve = -1.0
@@ -559,6 +595,14 @@ class ShopController:
         off = np.array([cf * rel[0] - sf * rel[1], sf * rel[0] + cf * rel[1]])
         goal = target[:2] - off
         err = goal - base
+        if self._phase == "REACH" and len(self._route_a) >= 2:
+            # at the shelf the base only slides along the aisle centreline (never into the
+            # shelf); the arm does the reaching across to the product
+            ax = self._route_a[-1] - self._route_a[-2]
+            nax = float(np.linalg.norm(ax))
+            if nax > 1e-6:
+                ax = ax / nax
+                err = ax * float(err @ ax)
         n = float(np.linalg.norm(err))
         v = err / n * min(0.6, 1.5 * n) if (n > 0.03 and not self.yielding) else np.zeros(2)
         d = self.data
