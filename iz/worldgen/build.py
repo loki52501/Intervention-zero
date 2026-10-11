@@ -9,17 +9,35 @@ from the spec using the layout convention of iz.worldgen.spec:
   aisles run along x; shelf unit j is row j % (aisles+1), slot j // (aisles+1).
 
 Target product is always body ``prod_0``.  Spec products become free bodies prod_0..prod_n.
+
+Spec v2 additions (all emit nothing when at their defaults, so v1 specs give byte-identical XML):
+  * collision bits: terrain (hfield, stairs) is contype 64 / conaffinity 10 and so touches only the cart and
+    products (the planar robot base ignores it); static obstacles, barriers and door leaves are contype 1 /
+    conaffinity 14 like shelves; free obstacles are contype 1 / conaffinity 15.
+  * doors follow iz/world/mujoco_door.py: hinge at the -y end of the leaf, range [-1.7, 0], spring to closed.
+    An open door is authored in its open pose (body quat yaw-1.6, joint ref/springref -1.6).
+  * per-seed domain randomisation comes from terrain.sample_dr and is stored in meta["dr"].
+  * an hfield's elevation is NOT inline in the XML: it is in meta["terrain"]["hf"] and applied with
+    terrain.set_hfield after compiling (use compile_world(xml, meta)).
+HONEST SCOPE: the planar robot base does not climb terrain; locomotion is a parametric gait engine, not a
+learned policy; the simulator is authored by us.
 """
 from __future__ import annotations
 
 import heapq
 import math
 import random
+import re
 
 import mujoco
 import numpy as np
 
 from iz.worldgen import spec as S
+
+try:  # W2 module; features depending on it are skipped honestly if it is missing
+    from iz.worldgen import terrain as T
+except Exception:  # noqa: BLE001
+    T = None
 
 LEDGE_ZS = [0.60, 0.90, 1.20]
 LEDGE_HY = 0.10
@@ -75,6 +93,33 @@ def _ledge_z(height_m):
     return min(LEDGE_ZS, key=lambda z: abs(z - height_m))
 
 
+def _all_spills(spec):
+    return list(S.all_spills(spec)) if hasattr(S, "all_spills") else list(spec.spills)
+
+
+def _blocking(spec):
+    return [tuple(map(float, r)) for r in S.blocking_rects(spec)] if hasattr(S, "blocking_rects") else []
+
+
+def _nl(txt, indent):
+    """Make an XML fragment end with exactly one newline ('' stays '')."""
+    txt = (txt or "").strip("\n")
+    return (indent + txt.lstrip() + "\n") if txt else ""
+
+
+def _yaw_quat(yaw):
+    return f"{math.cos(yaw / 2):.6f} 0 0 {math.sin(yaw / 2):.6f}"
+
+
+def compile_world(xml: str, meta: dict):
+    """Compile the XML and apply the hfield elevation kept in meta (elevation is not inline)."""
+    model = mujoco.MjModel.from_xml_string(xml)
+    hf = (meta.get("terrain") or {}).get("hf")
+    if hf and T is not None:
+        T.set_hfield(model, hf)
+    return model
+
+
 def _obstacles(spec, counter):
     """Rects (x0,y0,x1,y1) the robot must keep away from: shelves incl. ledges, and counter."""
     rows = spec.aisles + 1
@@ -86,6 +131,7 @@ def _obstacles(spec, counter):
         out.append((x0, lo, x1, hi))
     cx, cy, hx, hy = counter
     out.append((cx - hx, cy - hy, cx + hx, cy + hy))
+    out.extend(_blocking(spec))
     return out
 
 
@@ -257,7 +303,7 @@ def build_world(spec, seed: int = 0):
     t_z = t_ledge + PROD_HALF[2] + 0.002
 
     # ---- spills along explicit spec positions
-    spills = [[float(s.x), float(s.y), float(s.radius)] for s in spec.spills]
+    spills = [[float(s.x), float(s.y), float(s.radius)] for s in _all_spills(spec)]
     paths = []
     zone_x = cart_xy[0] + 0.9                 # keep shoppers out of the robot/cart staging area
     for pth in S.shopper_paths(spec):
@@ -266,7 +312,36 @@ def build_world(spec, seed: int = 0):
             pth[-1][0] = min(w - 0.8, pth[0][0] + 3.0)
         paths.append(pth)
     sh_speed = float(spec.shoppers.speed_mps)
-    mass = float(spec.cart.mass_kg)
+    # ---- v2: per-seed domain randomisation, terrain, obstacles, hazards (all optional)
+    dr_spec = getattr(spec, "dr", None)
+    dr = T.sample_dr(dr_spec.model_dump() if dr_spec else None, spec.name, seed,
+                     horizon_s=spec.success.max_time_s) if T is not None else {"enabled": False}
+    dr_on = bool(dr.get("enabled"))
+    scale = float(dr.get("mass_scale", 1.0)) if dr_on else 1.0
+    floor_fr = f"{float(dr['friction']):.4f} 0.005 0.0001" if dr_on else "1 0.005 0.0001"
+    prod_mass = f"{0.3 * scale:.4f}" if dr_on else "0.3"
+    mass = float(spec.cart.mass_kg) * scale
+
+    terr = getattr(spec, "terrain", None)
+    region = S.terrain_region(spec) if (terr is not None and hasattr(S, "terrain_region")) else None
+    ttype = getattr(terr, "type", "flat") if terr is not None else "flat"
+    hf, hf_asset, hf_geom, stairs_x = None, "", "", ""
+    if T is not None and region is not None and ttype in ("rough", "slope", "ramp"):
+        hf = T.hfield_data(terr.model_dump(), region, spec.name, seed)
+        if hf is not None:
+            try:
+                hf_asset, hf_geom = T.hfield_xml(hf, float(floor_fr.split()[0]))
+            except TypeError:
+                hf_asset, hf_geom = T.hfield_xml(hf)
+            hf_asset = _nl(hf_asset, "    ")
+            hf_geom = _nl(hf_geom, "    ")
+    elif T is not None and region is not None and ttype == "steps":
+        stairs_x, _ = T.stairs_xml(terr.model_dump(), region)
+        stairs_x = _nl(stairs_x, "    ")
+    obstacles = list(getattr(spec, "obstacles", []) or [])
+    hazards = list(getattr(spec, "hazards", []) or [])
+    lighting = getattr(spec, "lighting", None)
+    ambient = float(lighting.ambient) if lighting is not None else 0.45
 
     robot_x, cart_x, tail, shop_meta = _shop_parts(mass, robot_xy, cart_xy)
 
@@ -280,29 +355,34 @@ def build_world(spec, seed: int = 0):
         waypoints=wps, route=route, checkout_xy=[float(cz[0]), float(cz[1])],
         checkout_robot_xy=[float(goal[0]), float(goal[1])],
         counter=list(counter), spills=spills, shopper_paths=paths, n_shoppers=len(paths),
-        shopper_speed=sh_speed, cart_mass_kg=mass, store_size=[w, h],
+        shopper_speed=sh_speed, cart_mass_kg=mass, store_size=[w, h], dr=dr,
         aisle_ys=[S.aisle_center_y(spec, a) for a in range(spec.aisles)],
         shelf_geoms=[f"shelf_{j}" for j in range(len(rects))],
         max_time_s=float(spec.success.max_time_s),
     )
 
+    from iz.shop.scene import robot_header_parts
+    rb_comp, rb_default, rb_asset = robot_header_parts()
+    rb_default = f"  {rb_default}\n" if rb_default else ""
+    rb_asset = f"    {rb_asset}\n" if rb_asset else ""
+
     A = []
     A.append(f"""<mujoco model="{spec.name or 'world'}">
-  <compiler angle="radian" autolimits="true"/>
+  <compiler angle="radian" autolimits="true"{rb_comp}/>
   <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81"/>
   <visual><global offwidth="1920" offheight="1080"/><quality shadowsize="2048"/>
-    <headlight ambient="0.45 0.45 0.45" diffuse="0.5 0.5 0.5"/></visual>
-  <asset>
-    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.78 0.86 0.95" rgb2="0.96 0.96 0.98" width="64" height="64"/>
+    <headlight ambient="{ambient:.2f} {ambient:.2f} {ambient:.2f}" diffuse="0.5 0.5 0.5"/></visual>
+{rb_default}  <asset>
+{rb_asset}    <texture name="sky" type="skybox" builtin="gradient" rgb1="0.78 0.86 0.95" rgb2="0.96 0.96 0.98" width="64" height="64"/>
     <texture name="floortex" type="2d" builtin="checker" rgb1="{_f(*fa)}" rgb2="{_f(*fb)}" width="256" height="256"/>
     <material name="floor" texture="floortex" texrepeat="{max(2, int(w))} {max(2, int(h))}" reflectance="0.05"/>
-  </asset>
+{hf_asset}  </asset>
   <worldbody>
     <light pos="{_f(w / 2, h / 2, 7)}" dir="0 0.2 -1" diffuse="0.6 0.6 0.6" castshadow="false"/>
     <light pos="{_f(w * 0.2, -3, 6)}" dir="0.3 0.5 -1" diffuse="0.35 0.35 0.35"/>
     <geom name="floor" type="plane" pos="{_f(w / 2, h / 2, 0)}" size="{_f(w / 2, h / 2, 0.1)}" material="floor"
-          friction="1 0.005 0.0001" contype="1" conaffinity="10" priority="0"/>
-    <camera name="cam_34" pos="{_f(w * 0.2, -h * 0.55, h * 0.85 + 2)}" xyaxes="1 0 0 0 0.6 0.8" fovy="55"/>
+          friction="{floor_fr}" contype="1" conaffinity="10" priority="0"/>
+{hf_geom}{stairs_x}    <camera name="cam_34" pos="{_f(w * 0.2, -h * 0.55, h * 0.85 + 2)}" xyaxes="1 0 0 0 0.6 0.8" fovy="55"/>
     <camera name="cam_top" pos="{_f(w / 2, h / 2, max(w, h) * 1.1)}" xyaxes="1 0 0 0 1 0" fovy="55"/>
 """)
     for nm, p, s in [("wall_s", (w / 2, -0.05, WALL_H), (w / 2, 0.05, WALL_H)),
@@ -373,6 +453,70 @@ def build_world(spec, seed: int = 0):
         A.append(f'    <geom name="spill_{i}" type="cylinder" pos="{_f(sx, sy, 0.001)}" size="{_f(max(r, 0.15), 0.001)}" '
                  f'friction="0.04 0.005 0.0001" priority="2" rgba="0.25 0.55 0.95 0.55" contype="1" conaffinity="2"/>\n')
 
+    # ---- v2 obstacles / doors / hazards (nothing is emitted for a v1 spec)
+    obst_meta, doors_meta, haz_meta = [], [], []
+    for i, o in enumerate(obstacles):
+        kind = getattr(o, "kind", "box")
+        ox, oy = float(o.x), float(o.y)
+        ow, ol, oh = float(o.w), float(o.l), float(o.h)
+        yaw = float(getattr(o, "yaw", 0.0) or 0.0)
+        om = getattr(o, "mass_kg", None)
+        is_open = bool(getattr(o, "open", False))
+        free = om is not None and kind != "door"
+        q = _yaw_quat(yaw)
+        if kind == "door":
+            ang = -1.6 if is_open else 0.0
+            ref = f' ref="{ang}"' if is_open else ""
+            A.append(f'    <body name="door_{i}" pos="{_f(ox, oy - ol / 2, 0)}" quat="{_yaw_quat(yaw + ang)}">\n'
+                     f'      <joint name="door_{i}_hinge" type="hinge" axis="0 0 1" range="-1.7 0" limited="true" '
+                     f'damping="8" stiffness="4" springref="{ang}"{ref}/>\n'
+                     f'      <geom name="door_{i}_leaf" type="box" pos="{_f(0, ol / 2, oh / 2)}" '
+                     f'size="{_f(ow / 2, ol / 2, oh / 2)}" contype="1" conaffinity="14" mass="20" '
+                     f'rgba="0.75 0.25 0.2 1"/>\n    </body>\n')
+            doors_meta.append(dict(name=f"door_{i}", joint=f"door_{i}_hinge", range=[-1.7, 0.0], open=is_open,
+                                   hinge_xy=[ox, oy - ol / 2]))
+        elif free:
+            A.append(f'    <body name="obst_{i}" pos="{_f(ox, oy, oh / 2 + 0.002)}" quat="{q}">\n'
+                     f'      <freejoint name="obst_{i}_free"/>\n'
+                     f'      <geom name="obst_{i}_g" type="box" size="{_f(ow / 2, ol / 2, oh / 2)}" '
+                     f'mass="{float(om) * scale:.4f}" contype="1" conaffinity="15" friction="0.8 0.005 0.0001" '
+                     f'rgba="0.85 0.55 0.2 1"/>\n    </body>\n')
+        else:
+            rgba = "0.95 0.8 0.1 1" if kind == "barrier" else "0.55 0.45 0.35 1"
+            A.append(f'    <geom name="obst_{i}" type="box" pos="{_f(ox, oy, oh / 2)}" size="{_f(ow / 2, ol / 2, oh / 2)}" '
+                     f'quat="{q}" contype="1" conaffinity="14" rgba="{rgba}"/>\n')
+            if kind == "barrier":
+                A.append(f'    <geom name="obst_{i}_stripe" type="box" pos="{_f(ox, oy, oh * 0.8)}" '
+                         f'size="{_f(ow / 2 + 0.002, ol / 2 + 0.002, oh * 0.1)}" quat="{q}" contype="0" '
+                         f'conaffinity="0" rgba="0.08 0.08 0.08 1"/>\n')
+        obst_meta.append(dict(name=f"door_{i}" if kind == "door" else f"obst_{i}", kind=kind, x=ox, y=oy, w=ow, l=ol,
+                              h=oh, yaw=yaw, free=bool(free), open=is_open))
+    for i, hz in enumerate(hazards):
+        kind = getattr(hz, "kind", "")
+        hx_, hy_ = float(hz.x), float(hz.y)
+        r = float(getattr(hz, "radius", None) or getattr(hz, "r", None) or 0.4)
+        if kind == "cable":
+            A.append(f'    <geom name="cable_{i}" type="capsule" fromto="{_f(hx_ - r, hy_, 0.012)} {_f(hx_ + r, hy_, 0.012)}" '
+                     f'size="0.012" contype="64" conaffinity="2" rgba="0.1 0.1 0.1 1"/>\n')
+        elif kind == "low_light":
+            A.append(f'    <site name="lowlight_{i}" type="cylinder" pos="{_f(hx_, hy_, 0.003)}" size="{_f(r)} 0.002" '
+                     f'rgba="0.05 0.05 0.1 0.6"/>\n')
+        haz_meta.append(dict(name=f"{kind}_{i}", kind=kind, x=hx_, y=hy_, radius=r))
+    if terr is not None:
+        meta["terrain"] = {**terr.model_dump(), "region": list(region) if region else None,
+                           "has_hfield": hf is not None, "collides_with": "cart+products"}
+        if hf is not None:
+            meta["terrain"]["hf"] = hf
+    else:
+        meta["terrain"] = {"type": "flat", "region": None, "has_hfield": False, "collides_with": "cart+products"}
+    meta["obstacles"], meta["doors"], meta["hazards"] = obst_meta, doors_meta, haz_meta
+    meta["people"] = meta["n_shoppers"]
+    meta["robots"] = int(getattr(spec, "robots", 1))
+    meta["robot_starts"] = [list(map(float, p)) for p in S.robot_starts(spec)] if hasattr(S, "robot_starts") else [list(robot_xy)]
+    meta["tasks"] = [t.model_dump() for t in getattr(spec, "tasks", [])]
+    meta["spec_version"] = getattr(spec, "spec_version", 1)
+    meta["template"] = getattr(spec, "template", "")
+
     # ---- shoppers
     shirt = [(0.85, 0.25, 0.3), (0.95, 0.65, 0.15), (0.35, 0.65, 0.35), (0.6, 0.35, 0.8), (0.9, 0.5, 0.6)]
     for i, p in enumerate(paths):
@@ -387,7 +531,7 @@ def build_world(spec, seed: int = 0):
     def prod_body(i, x, y, lz, rgb):
         return (f'    <body name="prod_{i}" pos="{_f(x, y, lz + PROD_HALF[2] + 0.002)}">\n'
                 f'      <freejoint name="prod_{i}_free"/>\n'
-                f'      <geom name="prod_{i}_g" type="box" size="{_f(*PROD_HALF)}" mass="0.3" friction="0.9 0.005 0.0001" '
+                f'      <geom name="prod_{i}_g" type="box" size="{_f(*PROD_HALF)}" mass="{prod_mass}" friction="0.9 0.005 0.0001" '
                 f'rgba="{_f(*rgb)} 1" contype="8" conaffinity="43"/>\n    </body>\n')
     A.append(prod_body(0, t_xy[0], t_xy[1], t_ledge, TARGET_RGB))
     for n, (j, lz, x, p) in enumerate(placed, start=1):
@@ -429,7 +573,7 @@ def _inside(p, r, m):
 def check_world(xml: str, meta: dict) -> list[str]:
     probs: list[str] = []
     try:
-        model = mujoco.MjModel.from_xml_string(xml)
+        model = compile_world(xml, meta)
     except Exception as e:  # noqa: BLE001
         return [f"compile error: {e}"]
     for k in REQUIRED_META:
@@ -489,6 +633,11 @@ def check_world(xml: str, meta: dict) -> list[str]:
         if (n.startswith("shelf_") and "_" not in n[6:]) or n == "checkout":
             c, s = data.geom_xpos[g], model.geom_size[g]
             rects.append((n, (c[0] - s[0], c[1] - s[1], c[0] + s[0], c[1] + s[1])))
+        elif re.fullmatch(r"obst_\d+", n) or re.fullmatch(r"door_\d+_leaf", n):
+            # static obstacle / door leaf: axis-aligned bound of the (possibly rotated) box at load
+            c, s = data.geom_xpos[g], model.geom_size[g]
+            ext = np.abs(data.geom_xmat[g].reshape(3, 3)) @ s
+            rects.append((n, (c[0] - ext[0], c[1] - ext[1], c[0] + ext[0], c[1] + ext[1])))
     wps = meta["waypoints"]
     W, H = meta.get("store_size", [None, None])
     route = [wps[i] for i in meta["route"]]
@@ -528,7 +677,7 @@ def render_preview(xml: str, meta: dict, path: str) -> str:
     import os
     from PIL import Image
 
-    model = mujoco.MjModel.from_xml_string(xml)
+    model = compile_world(xml, meta)
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     w, h = meta.get("store_size", [12.0, 8.0])
@@ -567,9 +716,34 @@ def render_preview(xml: str, meta: dict, path: str) -> str:
         for pth in meta.get("shopper_paths", []):
             for a, b in zip(pth[:-1], pth[1:]):
                 add(mujoco.mjtGeom.mjGEOM_CAPSULE, (0.9, 0.3, 0.3, 0.7), (0.015,), (a[0], a[1], 0.04), (b[0], b[1], 0.04))
+        for hz in meta.get("hazards", []):
+            if hz.get("kind") == "low_light":
+                add(mujoco.mjtGeom.mjGEOM_CYLINDER, (0.9, 0.1, 0.1, 0.45), (hz["radius"], 0.004, 0), (hz["x"], hz["y"], 0.01))
+        for d in meta.get("doors", []):
+            hx_, hy_ = d["hinge_xy"]
+            add(mujoco.mjtGeom.mjGEOM_SPHERE, (1.0, 0.0, 1.0, 1), (0.12, 0, 0), (hx_, hy_, 0.25))
         img = r.render()
     finally:
         r.close()
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     Image.fromarray(img).save(path)
     return path
+
+
+if __name__ == "__main__":
+    import json
+    import os
+
+    from iz.worldgen.generate import demo_specs
+
+    for slug, spec in demo_specs().items():
+        xml, meta = build_world(spec, seed=0)
+        probs = check_world(xml, meta)
+        print(slug, probs)
+        d = os.path.join("out", "worldgen", slug)
+        os.makedirs(d, exist_ok=True)
+        render_preview(xml, meta, os.path.join(d, "preview.png"))
+        with open(os.path.join(d, "spec.json"), "w", encoding="utf-8") as fh:
+            json.dump(spec.model_dump(), fh, indent=1, default=float)
+        with open(os.path.join(d, "meta.json"), "w", encoding="utf-8") as fh:
+            json.dump(meta, fh, default=float)
