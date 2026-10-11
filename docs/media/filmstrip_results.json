@@ -1,0 +1,216 @@
+{
+  "cart_before": {
+    "params": {
+      "cart_mass_kg": 20.0,
+      "move_force_n": 20.0,
+      "tip_force_n": 35.0,
+      "red_tag": false
+    },
+    "commanded_input": "push force 40 N (input)",
+    "success": false,
+    "reason": "cart tipped at 80 deg",
+    "peak_force_n": 40.0,
+    "time_s": 1.118,
+    "extra": {
+      "displacement_m": 0.014374718897419076,
+      "max_tilt_deg": 80.06261881650349,
+      "tipped": true
+    },
+    "frame_times": [
+      0.002,
+      0.23400000000000018,
+      0.43400000000000033,
+      0.6680000000000005,
+      0.9000000000000007,
+      1.1180000000000008
+    ],
+    "camera": {
+      "lookat": [
+        0.3,
+        0,
+        0.5
+      ],
+      "distance": 3.6,
+      "azimuth": 120,
+      "elevation": -20
+    },
+    "clip_path": "F:\\something_simple\\intervention-zero\\out\\clips\\filmstrip_cart_before.mp4",
+    "png_path": "F:\\something_simple\\intervention-zero\\docs\\media\\cart_before.png",
+    "unhooked": {
+      "success": false,
+      "reason": "cart tipped at 25 deg",
+      "peak_force_n": 40.0,
+      "time_s": 0.774,
+      "extra": {
+        "displacement_m": 0.022475355508165963,
+        "max_tilt_deg": 25.015893042248447,
+        "tipped": true
+      }
+    },
+    "determinism_ok": true,
+    "outcome_as_expected": true,
+    "tipped_uses_module_threshold_deg": 25.0
+  },
+  "cart_after": {
+    "params": {
+      "cart_mass_kg": 20.0,
+      "move_force_n": 20.0,
+      "tip_force_n": 35.0,
+      "red_tag": false
+    },
+    "commanded_input": "push force 25 N (input)",
+    "success": true,
+    "reason": "moved 1.6 m upright",
+    "peak_force_n": 25.0,
+    "time_s": 3.862,
+    "extra": {
+      "displacement_m": 1.6004484530367693,
+      "max_tilt_deg": 0.12050019852336938,
+      "tipped": false
+    },
+    "frame_times": [
+      0.002,
+      0.7680000000000006,
+      1.5340000000000011,
+      2.3339999999999645,
+      3.09999999999988,
+      3.8619999999997963
+    ],
+    "camera": {
+      "lookat": [
+        0.7,
+        0,
+        0.6
+      ],
+      "distance": 4.2,
+      "azimuth": 120,
+      "elevation": -20
+    },
+    "clip_path": "F:\\something_simple\\intervention-zero\\out\\clips\\filmstrip_cart_after.mp4",
+    "png_path": "F:\\something_simple\\intervention-zero\\docs\\media\\cart_after.png",
+    "unhooked": {
+      "success": true,
+      "reason": "moved 1.7 m upright",
+      "peak_force_n": 25.0,
+      "time_s": 4.0,
+      "extra": {
+        "displacement_m": 1.7129973337939857,
+        "max_tilt_deg": 0.12050019852336938,
+        "tipped": false
+      }
+    },
+    "determinism_ok": true,
+    "outcome_as_expected": true,
+    "tipped_uses_module_threshold_deg": 25.0
+  },
+  "firedoor_before": {
+    "params": {
+      "door_type": "fire",
+      "door_id": "D-17",
+      "door_mass_kg": 40.0,
+      "min_push_n": 160.0,
+      "open_delay_s": 9.0
+    },
+    "commanded_input": "push_door 60 N (input)",
+    "success": false,
+    "reason": "door closer held, robot stalled at x=-0.22",
+    "peak_force_n": 60.0,
+    "time_s": 2.696,
+    "extra": {
+      "door_angle_rad": -0.5000577632450014,
+      "door_tip_x_m": 0.4315286068387942,
+      "robot_x_m": -0.21715321737199464,
+      "crossed": false
+    },
+    "frame_times": [
+      0.004,
+      0.5360000000000004,
+      1.0680000000000007,
+      1.6000000000000012,
+      2.1680000000000015,
+      2.696000000000002
+    ],
+    "camera": {
+      "lookat": [
+        0.1,
+        0,
+        0.6
+      ],
+      "distance": 5.0,
+      "azimuth": 25,
+      "elevation": -55
+    },
+    "clip_path": "F:\\something_simple\\intervention-zero\\out\\clips\\filmstrip_firedoor_before.mp4",
+    "png_path": "F:\\something_simple\\intervention-zero\\docs\\media\\firedoor_before.png",
+    "unhooked": {
+      "success": false,
+      "reason": "door closer held, robot stalled at x=-0.22",
+      "peak_force_n": 60.0,
+      "time_s": 2.696,
+      "extra": {
+        "door_angle_rad": -0.5000577632450014,
+        "door_tip_x_m": 0.4315286068387942,
+        "robot_x_m": -0.21715321737199464,
+        "crossed": false
+      }
+    },
+    "determinism_ok": true,
+    "outcome_as_expected": true,
+    "tipped_uses_module_threshold_deg": 25.0
+  },
+  "firedoor_after": {
+    "params": {
+      "door_type": "fire",
+      "door_id": "D-17",
+      "door_mass_kg": 40.0,
+      "min_push_n": 160.0,
+      "open_delay_s": 9.0
+    },
+    "commanded_input": "request_open + wait 10 s (input)",
+    "success": true,
+    "reason": "crossed at 12.0 s",
+    "peak_force_n": 0.0,
+    "time_s": 11.96,
+    "extra": {
+      "door_angle_rad": -1.731359217705804,
+      "door_tip_x_m": 0.8884237033892934,
+      "robot_x_m": 0.6021042936825197,
+      "crossed": true
+    },
+    "frame_times": [
+      0.004,
+      4.499999999999948,
+      8.999999999999453,
+      9.999999999999343,
+      10.967999999999236,
+      11.959999999999127
+    ],
+    "camera": {
+      "lookat": [
+        0.1,
+        0,
+        0.6
+      ],
+      "distance": 5.0,
+      "azimuth": 25,
+      "elevation": -55
+    },
+    "clip_path": "F:\\something_simple\\intervention-zero\\out\\clips\\filmstrip_firedoor_after.mp4",
+    "png_path": "F:\\something_simple\\intervention-zero\\docs\\media\\firedoor_after.png",
+    "unhooked": {
+      "success": true,
+      "reason": "crossed at 12.0 s",
+      "peak_force_n": 0.0,
+      "time_s": 11.96,
+      "extra": {
+        "door_angle_rad": -1.731359217705804,
+        "door_tip_x_m": 0.8884237033892934,
+        "robot_x_m": 0.6021042936825197,
+        "crossed": true
+      }
+    },
+    "determinism_ok": true,
+    "outcome_as_expected": true,
+    "tipped_uses_module_threshold_deg": 25.0
+  }
+}
