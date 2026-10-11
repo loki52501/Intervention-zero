@@ -214,6 +214,7 @@ class EnvMemory:
         self.db = db if db is not None else get_db()
         self.embedder = embedder or _default_embedder(self.db)
         self.last_path: str | None = None
+        self.scope: str | None = None  # env_id prefix; recall only sees docs from this namespace
         self.last_context_tokens = 0
         if ensure:
             ensure_collections(self.db)
@@ -359,9 +360,11 @@ class EnvMemory:
         e = env_fields(env)
         query = f"{e['venue']} {e['env_name']} {e['text']}".strip() or e["env_id"]
         pdocs, ppath = self._search(PROCEDURES, query, "procedure", k * 4 + 4)
-        procs = [d for d in pdocs if d.get("env_id") != e["env_id"]][:k]
+        sc = self.scope
+        inscope = lambda d: not sc or str(d.get("env_id", "")).startswith(sc)  # noqa: E731
+        procs = [d for d in pdocs if d.get("env_id") != e["env_id"] and inscope(d)][:k]
         edocs, epath = self._search(EPISODES, query, "episode", k * 4 + 4)
-        eps = [d for d in edocs if d.get("operator_tip") or d.get("failure")][:k]
+        eps = [d for d in edocs if (d.get("operator_tip") or d.get("failure")) and inscope(d)][:k]
         facts = list(self.db[FACTS].find({"env_id": e["env_id"]}, {"embedding": 0}).limit(20))
         for lst in (procs, eps):
             for d in lst:

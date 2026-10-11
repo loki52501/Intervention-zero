@@ -117,6 +117,12 @@ def main(argv=None) -> int:
         from iz.llm.client import make_llm
         llm = make_llm()
     memory = EnvMemory()
+    memory.scope = run_id + ":"  # env1 truly starts from empty memory; no leakage from older runs
+    try:
+        from iz.robotmem.card import robot_card, store_card
+        store_card(robot_card(), db=memory.db)
+    except Exception as exc:  # card persistence must not block the tour
+        print("robot card not stored:", type(exc).__name__, exc)
     ids = [f"{run_id}:env{i + 1}" for i in range(len(prompts))]
     ids += [i + ":cold" for i in ids]
     if a.fresh:
