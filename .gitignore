@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# artifacts
+out/
+*.mp4
+*.png
+!docs/**/*.png
+.claude/settings.local.json

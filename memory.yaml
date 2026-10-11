@@ -1,0 +1,58 @@
+# Project memory: single source of truth for state across agents and sessions.
+# Every orchestrator reads this before starting and updates its own section when a
+# milestone changes. Append to `log`, never delete entries (the hook enforces history in CHANGES.md).
+
+project: intervention-zero
+pitch: >
+  A robot that needs a human every fifth mission isn't autonomous. Intervention Zero
+  turns every takeover into a tested, permanent fix.
+deadline:
+  feature_freeze: "2026-10-11T16:05:00-07:00"
+  submission: "2026-10-11T17:00:00-07:00"
+
+decisions:   # agreed with Lokesh during brainstorming, 13:40-13:52
+  - id: D1
+    what: "3D engine + real physics = MuJoCo (per-incident micro-scenes generated from the site map)"
+    fallback: "abstract rule judges behind the same Judge interface; hard cut 15:00 if physics unstable"
+  - id: D2
+    what: "Actions carry physical params (force N, wait s); MuJoCo decides outcome for door/cart/crowd/spill/barrier"
+    rule_judged: [person_down, restricted_shortcut, elevator_out_of_service, low_battery, badge_door, elevator_wait]
+  - id: D3
+    what: "Option A: 3-layer recursion. Robot <- Fixer (writes harness diffs) <- Coach (rewrites fixer playbook). Same gate judges both."
+    locked: "gate thresholds and locked guardrails can never be changed by fixer or coach"
+    priority: "coach is built after the first closed loop; first to cut if behind"
+  - id: D4
+    what: "Raindrop via base Python SDK (raindrop-ai). user_id=robot_id, convo_id=site:day:shift, event=mission|fix_cycle|coach_cycle"
+    note: "track_signal signal_type only accepts default|feedback|edit -> self-reports are default signal 'agent_report'"
+    budget: "RAINDROP_ENABLED=0 by default; <900 events total; replays/gate never log events"
+  - id: D5
+    what: "Atlas Agent Engine memory: try in parallel (Lokesh does CLI login); abandon 14:30 if not returning memories"
+  - id: D6
+    what: "Situation templates cut to 8 solid ones incl. the 4 anchors (fire door D-17, cart C2, server room S-2, renovation drift)"
+
+milestones:
+  M0_setup:        {status: in_progress, owner: main, target: "14:05"}
+  M1_contracts:    {status: todo, owner: main, target: "14:10", file: iz/types.py}
+  M2_world:        {status: todo, owner: orch-world, target: "14:50"}
+  M2_physics:      {status: todo, owner: orch-world, target: "15:00"}
+  M2_store:        {status: todo, owner: orch-store, target: "14:50"}
+  M3_agent_loop:   {status: todo, owner: orch-loop, target: "15:30"}
+  M4_drift_resume_ablation: {status: todo, owner: orch-loop, target: "16:00"}
+  M4_ui:           {status: todo, owner: orch-ui, target: "16:00"}
+  M5_freeze:       {status: todo, owner: main, target: "16:05"}
+
+facts:
+  python: "3.13.6 in .venv"
+  docker: "29.7.2 running"
+  raindrop_write_key: "present in .env (never print)"
+  mongodb_uri: "missing"
+  voyage_key: "missing"
+  llm_key: "missing (provider not chosen)"
+
+open_questions:
+  - "LLM provider + model names for robot and fixer"
+  - "Atlas URI, DB user, IP access; Voyage model API key"
+  - "Raindrop Query API key; Pro available?"
+
+log:
+  - "13:53 repo + venv created, deps installing"
